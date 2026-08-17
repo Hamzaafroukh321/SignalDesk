@@ -231,4 +231,44 @@ describe('SignalDesk application shell', () => {
       screen.queryByRole('button', { name: 'Clear all filters' }),
     ).not.toBeInTheDocument()
   })
+
+  it('sorts columns in both directions with accessible, stable ordering', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    let table = await screen.findByRole('table')
+    let tableScope = within(table)
+
+    expect(
+      tableScope.getByRole('columnheader', { name: 'Updated' }),
+    ).toHaveAttribute('aria-sort', 'descending')
+    expect(
+      tableScope
+        .getAllByRole('rowheader')
+        .slice(0, 5)
+        .map((header) => header.textContent?.slice(0, 7)),
+    ).toEqual(['SD-1048', 'SD-1062', 'SD-1086', 'SD-1128', 'SD-1160'])
+
+    await user.click(tableScope.getByRole('button', { name: 'Ticket' }))
+    table = await screen.findByRole('table')
+    tableScope = within(table)
+    expect(
+      tableScope.getByRole('columnheader', { name: 'Ticket' }),
+    ).toHaveAttribute('aria-sort', 'ascending')
+    expect(tableScope.getAllByRole('rowheader')[0]).toHaveTextContent(
+      'Can guests comment without edit access?',
+    )
+    expect(screen.getByText('Sorted by Ticket title · Ascending')).toBeVisible()
+
+    await user.click(tableScope.getByRole('button', { name: 'Ticket' }))
+    table = await screen.findByRole('table')
+    tableScope = within(table)
+    expect(
+      tableScope.getByRole('columnheader', { name: 'Ticket' }),
+    ).toHaveAttribute('aria-sort', 'descending')
+    expect(tableScope.getAllByRole('rowheader')[0]).toHaveTextContent(
+      'Workspace import needs field mapping help',
+    )
+  })
 })

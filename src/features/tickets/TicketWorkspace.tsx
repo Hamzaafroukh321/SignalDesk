@@ -11,7 +11,9 @@ import {
 } from '../../domain/ticket'
 import {
   isAbortError,
+  type SortDirection,
   type TicketRepository,
+  type TicketSortField,
 } from '../../data/ticketRepository'
 import { TicketTable } from './TicketTable'
 
@@ -44,6 +46,8 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   const [search, setSearch] = useState('')
   const [statuses, setStatuses] = useState<TicketStatus[]>([])
   const [priorities, setPriorities] = useState<TicketPriority[]>([])
+  const [sortBy, setSortBy] = useState<TicketSortField>('updatedAt')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const resultsHeadingRef = useRef<HTMLHeadingElement>(null)
   const focusResultsAfterRetryRef = useRef(false)
   const latestRequestRef = useRef(0)
@@ -55,7 +59,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
 
     void repository
       .listTickets(
-        { search, statuses, priorities },
+        { search, statuses, priorities, sortBy, sortDirection },
         { signal: controller.signal },
       )
       .then((page) => {
@@ -89,7 +93,15 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       }
       controller.abort()
     }
-  }, [priorities, repository, requestVersion, search, statuses])
+  }, [
+    priorities,
+    repository,
+    requestVersion,
+    search,
+    sortBy,
+    sortDirection,
+    statuses,
+  ])
 
   useEffect(() => {
     if (list.status === 'success' && focusResultsAfterRetryRef.current) {
@@ -153,8 +165,24 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     setPriorities([])
   }
 
+  const sortTickets = (field: TicketSortField) => {
+    markResultsUpdating()
+    if (field === sortBy) {
+      setSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setSortBy(field)
+    setSortDirection('asc')
+  }
+
   const activeFilterCount = statuses.length + priorities.length
   const hasListRefinement = Boolean(search || activeFilterCount)
+  const sortLabel: Record<TicketSortField, string> = {
+    title: 'Ticket title',
+    status: 'Status',
+    priority: 'Priority',
+    updatedAt: 'Updated time',
+  }
 
   return (
     <>
@@ -259,7 +287,13 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
           </h2>
         </div>
         {visibleSnapshot ? (
-          <span className="result-count">{visibleSnapshot.totalCount} tickets</span>
+          <div className="result-meta">
+            <span className="result-count">{visibleSnapshot.totalCount} tickets</span>
+            <span className="sort-summary">
+              Sorted by {sortLabel[sortBy]} ·{' '}
+              {sortDirection === 'asc' ? 'Ascending' : 'Descending'}
+            </span>
+          </div>
         ) : null}
       </div>
 
@@ -277,6 +311,9 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
         <TicketTable
           tickets={tickets}
           totalCount={visibleSnapshot.totalCount}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
+          onSort={sortTickets}
         />
       ) : null}
 

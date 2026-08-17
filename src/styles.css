@@ -185,6 +185,19 @@ textarea {
   font-weight: 750;
 }
 
+.result-meta {
+  display: grid;
+  flex: none;
+  gap: 0.4rem;
+  justify-items: end;
+}
+
+.sort-summary {
+  color: #687388;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
 .result-state {
   display: flex;
   gap: 1rem;
@@ -435,6 +448,38 @@ textarea {
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.sort-button {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.25rem 0.2rem;
+  margin: -0.25rem -0.2rem;
+  border: 0;
+  border-radius: 0.25rem;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.sort-button:hover {
+  color: #3546b4;
+  background: #edf0fa;
+}
+
+.sort-button:focus-visible {
+  outline: 3px solid #7c8cff;
+  outline-offset: 2px;
+}
+
+.sort-icon {
+  color: #5260c8;
+  font-size: 0.9rem;
+  line-height: 1;
 }
 
 .ticket-table thead th:first-child {

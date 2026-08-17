@@ -1,8 +1,15 @@
 import { getPriorityLabel, getStatusLabel, type Ticket } from '../../domain/ticket'
+import type {
+  SortDirection,
+  TicketSortField,
+} from '../../data/ticketRepository'
 
 interface TicketTableProps {
   tickets: readonly Ticket[]
   totalCount: number
+  sortBy: TicketSortField
+  sortDirection: SortDirection
+  onSort: (field: TicketSortField) => void
 }
 
 const dateFormatter = new Intl.DateTimeFormat('en', {
@@ -12,7 +19,45 @@ const dateFormatter = new Intl.DateTimeFormat('en', {
   timeZone: 'UTC',
 })
 
-export function TicketTable({ tickets, totalCount }: TicketTableProps) {
+interface SortableHeaderProps {
+  field: TicketSortField
+  label: string
+  activeField: TicketSortField
+  direction: SortDirection
+  onSort: (field: TicketSortField) => void
+}
+
+function SortableHeader({
+  field,
+  label,
+  activeField,
+  direction,
+  onSort,
+}: SortableHeaderProps) {
+  const active = activeField === field
+
+  return (
+    <th
+      scope="col"
+      aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <button type="button" className="sort-button" onClick={() => onSort(field)}>
+        <span>{label}</span>
+        <span className="sort-icon" aria-hidden="true">
+          {active ? (direction === 'asc' ? '↑' : '↓') : '↕'}
+        </span>
+      </button>
+    </th>
+  )
+}
+
+export function TicketTable({
+  tickets,
+  totalCount,
+  sortBy,
+  sortDirection,
+  onSort,
+}: TicketTableProps) {
   return (
     <div className="table-scroll">
       <table className="ticket-table">
@@ -21,12 +66,36 @@ export function TicketTable({ tickets, totalCount }: TicketTableProps) {
         </caption>
         <thead>
           <tr>
-            <th scope="col">Ticket</th>
+            <SortableHeader
+              field="title"
+              label="Ticket"
+              activeField={sortBy}
+              direction={sortDirection}
+              onSort={onSort}
+            />
             <th scope="col">Customer</th>
-            <th scope="col">Status</th>
-            <th scope="col">Priority</th>
+            <SortableHeader
+              field="status"
+              label="Status"
+              activeField={sortBy}
+              direction={sortDirection}
+              onSort={onSort}
+            />
+            <SortableHeader
+              field="priority"
+              label="Priority"
+              activeField={sortBy}
+              direction={sortDirection}
+              onSort={onSort}
+            />
             <th scope="col">Assignee</th>
-            <th scope="col">Updated</th>
+            <SortableHeader
+              field="updatedAt"
+              label="Updated"
+              activeField={sortBy}
+              direction={sortDirection}
+              onSort={onSort}
+            />
           </tr>
         </thead>
         <tbody>
