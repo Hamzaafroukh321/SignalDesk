@@ -186,9 +186,49 @@ describe('SignalDesk application shell', () => {
     ).toBeVisible()
     await new Promise((resolve) => setTimeout(resolve, 140))
     expect(search).toHaveValue('')
-    expect(screen.queryByText('No tickets match your search')).not.toBeInTheDocument()
+    expect(screen.queryByText('No tickets match this view')).not.toBeInTheDocument()
     expect(screen.getByRole('table')).toHaveAccessibleName(
       /showing 10 of 24/,
     )
+  })
+
+  it('combines search with multiple-value filters and clears filters explicitly', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    await screen.findByRole('table')
+
+    const search = screen.getByRole('searchbox', { name: 'Search tickets' })
+    await user.type(search, 'Billing')
+    expect(
+      await screen.findByRole('table', { name: /showing 5 of 5/ }),
+    ).toBeVisible()
+
+    await user.click(screen.getByRole('checkbox', { name: 'New' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Open' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Urgent' }))
+
+    expect(
+      await screen.findByRole('table', { name: /showing 2 of 2/ }),
+    ).toBeVisible()
+    expect(screen.getByText('Invoice shows duplicate annual charge')).toBeVisible()
+    expect(
+      screen.getByText(/3 active filters: Status New, Open; Priority Urgent/),
+    ).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(
+      await screen.findByRole('table', { name: /showing 3 of 3/ }),
+    ).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Clear all filters' }))
+    expect(
+      await screen.findByRole('table', { name: /showing 10 of 24/ }),
+    ).toBeVisible()
+    expect(screen.getByText('No status or priority filters are active.')).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: 'Clear all filters' }),
+    ).not.toBeInTheDocument()
   })
 })

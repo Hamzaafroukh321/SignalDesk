@@ -257,6 +257,67 @@ textarea {
   outline-offset: 2px;
 }
 
+.filter-groups {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1.75rem;
+}
+
+.filter-groups fieldset {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.filter-groups legend {
+  padding: 0;
+  margin-bottom: 0.65rem;
+  color: #2c3650;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.filter-option {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  min-height: 1.85rem;
+  color: #505c72;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.filter-option input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: #4654d6;
+}
+
+.filter-option input:focus-visible {
+  outline: 3px solid #7c8cff;
+  outline-offset: 2px;
+}
+
+.filter-summary {
+  margin-top: 1.4rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e8ef;
+}
+
+.filter-summary p {
+  margin: 0;
+  color: #647086;
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
+.filter-summary .clear-button {
+  margin-top: 0.55rem;
+}
+
 .result-state h3,
 .result-state p {
   margin: 0;
@@ -490,6 +551,10 @@ textarea {
   }
 
   .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-groups {
     grid-template-columns: 1fr;
   }
 }

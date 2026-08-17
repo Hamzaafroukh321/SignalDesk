@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Ticket, TicketId } from '../../domain/ticket'
+import {
+  getPriorityLabel,
+  getStatusLabel,
+  ticketPriorities,
+  ticketStatuses,
+  type Ticket,
+  type TicketId,
+  type TicketPriority,
+  type TicketStatus,
+} from '../../domain/ticket'
 import {
   isAbortError,
   type TicketRepository,
@@ -33,6 +42,8 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   })
   const [requestVersion, setRequestVersion] = useState(0)
   const [search, setSearch] = useState('')
+  const [statuses, setStatuses] = useState<TicketStatus[]>([])
+  const [priorities, setPriorities] = useState<TicketPriority[]>([])
   const resultsHeadingRef = useRef<HTMLHeadingElement>(null)
   const focusResultsAfterRetryRef = useRef(false)
   const latestRequestRef = useRef(0)
@@ -43,7 +54,10 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     latestRequestRef.current = requestId
 
     void repository
-      .listTickets({ search }, { signal: controller.signal })
+      .listTickets(
+        { search, statuses, priorities },
+        { signal: controller.signal },
+      )
       .then((page) => {
         if (requestId !== latestRequestRef.current) return
         setList({
@@ -75,7 +89,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       }
       controller.abort()
     }
-  }, [repository, requestVersion, search])
+  }, [priorities, repository, requestVersion, search, statuses])
 
   useEffect(() => {
     if (list.status === 'success' && focusResultsAfterRetryRef.current) {
@@ -94,22 +108,53 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
         })
       : []
 
-  const retry = () => {
-    focusResultsAfterRetryRef.current = true
+  const markResultsUpdating = () => {
     setList((current) => ({
       status: 'loading',
       previous: getSnapshot(current),
     }))
+  }
+
+  const retry = () => {
+    focusResultsAfterRetryRef.current = true
+    markResultsUpdating()
     setRequestVersion((version) => version + 1)
   }
 
   const beginSearch = (value: string) => {
-    setList((current) => ({
-      status: 'loading',
-      previous: getSnapshot(current),
-    }))
+    markResultsUpdating()
     setSearch(value)
   }
+
+  const setStatusFilter = (status: TicketStatus, checked: boolean) => {
+    markResultsUpdating()
+    setStatuses((current) =>
+      ticketStatuses.filter((candidate) =>
+        candidate === status ? checked : current.includes(candidate),
+      ),
+    )
+  }
+
+  const setPriorityFilter = (
+    priority: TicketPriority,
+    checked: boolean,
+  ) => {
+    markResultsUpdating()
+    setPriorities((current) =>
+      ticketPriorities.filter((candidate) =>
+        candidate === priority ? checked : current.includes(candidate),
+      ),
+    )
+  }
+
+  const clearFilters = () => {
+    markResultsUpdating()
+    setStatuses([])
+    setPriorities([])
+  }
+
+  const activeFilterCount = statuses.length + priorities.length
+  const hasListRefinement = Boolean(search || activeFilterCount)
 
   return (
     <>
@@ -142,6 +187,62 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
               </button>
             ) : null}
           </div>
+        </div>
+
+        <div className="filter-groups">
+          <fieldset>
+            <legend>Status</legend>
+            {ticketStatuses.map((status) => (
+              <label key={status} className="filter-option">
+                <input
+                  type="checkbox"
+                  checked={statuses.includes(status)}
+                  onChange={(event) =>
+                    setStatusFilter(status, event.currentTarget.checked)
+                  }
+                />
+                <span>{getStatusLabel(status)}</span>
+              </label>
+            ))}
+          </fieldset>
+
+          <fieldset>
+            <legend>Priority</legend>
+            {ticketPriorities.map((priority) => (
+              <label key={priority} className="filter-option">
+                <input
+                  type="checkbox"
+                  checked={priorities.includes(priority)}
+                  onChange={(event) =>
+                    setPriorityFilter(priority, event.currentTarget.checked)
+                  }
+                />
+                <span>{getPriorityLabel(priority)}</span>
+              </label>
+            ))}
+          </fieldset>
+        </div>
+
+        <div className="filter-summary" aria-live="polite">
+          <p>
+            {activeFilterCount
+              ? `${activeFilterCount} active ${activeFilterCount === 1 ? 'filter' : 'filters'}: ${[
+                  statuses.length
+                    ? `Status ${statuses.map(getStatusLabel).join(', ')}`
+                    : '',
+                  priorities.length
+                    ? `Priority ${priorities.map(getPriorityLabel).join(', ')}`
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join('; ')}.`
+              : 'No status or priority filters are active.'}
+          </p>
+          {activeFilterCount ? (
+            <button className="clear-button" type="button" onClick={clearFilters}>
+              Clear all filters
+            </button>
+          ) : null}
         </div>
       </section>
 
@@ -185,10 +286,14 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
             0
           </span>
           <div>
-            <h3>{search ? 'No tickets match your search' : 'No tickets in this queue'}</h3>
+            <h3>
+              {hasListRefinement
+                ? 'No tickets match this view'
+                : 'No tickets in this queue'}
+            </h3>
             <p>
-              {search
-                ? `Try another phrase or clear “${search}” to return to the full queue.`
+              {hasListRefinement
+                ? 'Try changing the search or clearing the active filters.'
                 : 'The current ticket view is valid, but it has no matching work.'}
             </p>
           </div>
@@ -213,8 +318,8 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       <div className="status-area">
         <p role="status" aria-live="polite" aria-atomic="true">
           {list.status === 'loading'
-            ? search
-              ? `Updating results for “${search}”…`
+            ? hasListRefinement
+              ? 'Updating the refined ticket results…'
               : 'Loading the ticket queue…'
             : null}
           {list.status === 'success' && list.snapshot.totalCount > 0
