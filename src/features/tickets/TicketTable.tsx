@@ -50,6 +50,7 @@ function SortableHeader({
   return (
     <th
       scope="col"
+      className={`sort-column sort-column-${field}`}
       aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
       <button type="button" className="sort-button" onClick={() => onSort(field)}>
@@ -107,6 +108,9 @@ export function TicketTable({
                 aria-describedby="selection-scope"
                 onChange={(event) => onToggleVisible(event.currentTarget.checked)}
               />
+              <span className="select-page-label" aria-hidden="true">
+                Select page
+              </span>
             </th>
             <SortableHeader
               field="title"
@@ -115,7 +119,9 @@ export function TicketTable({
               direction={sortDirection}
               onSort={onSort}
             />
-            <th scope="col">Customer</th>
+            <th scope="col" className="static-column-heading">
+              Customer
+            </th>
             <SortableHeader
               field="status"
               label="Status"
@@ -130,7 +136,9 @@ export function TicketTable({
               direction={sortDirection}
               onSort={onSort}
             />
-            <th scope="col">Assignee</th>
+            <th scope="col" className="static-column-heading">
+              Assignee
+            </th>
             <SortableHeader
               field="updatedAt"
               label="Updated"
@@ -154,7 +162,7 @@ export function TicketTable({
                   }
                 />
               </td>
-              <th scope="row">
+              <th scope="row" className="ticket-summary-cell">
                 <span className="ticket-id">{ticket.id}</span>
                 <button
                   type="button"
@@ -168,19 +176,38 @@ export function TicketTable({
                   {ticket.title}
                 </button>
               </th>
-              <td>{ticket.customer.name}</td>
-              <td>
+              <td className="ticket-data-cell customer-cell">
+                <span className="mobile-cell-label" aria-hidden="true">
+                  Customer
+                </span>
+                <span>{ticket.customer.name}</span>
+              </td>
+              <td className="ticket-data-cell status-cell">
+                <span className="mobile-cell-label" aria-hidden="true">
+                  Status
+                </span>
                 <span className={`badge status-${ticket.status}`}>
                   {getStatusLabel(ticket.status)}
                 </span>
               </td>
-              <td>
+              <td className="ticket-data-cell priority-cell">
+                <span className="mobile-cell-label" aria-hidden="true">
+                  Priority
+                </span>
                 <span className={`badge priority-${ticket.priority}`}>
                   {getPriorityLabel(ticket.priority)}
                 </span>
               </td>
-              <td>{ticket.assignee?.name ?? 'Unassigned'}</td>
-              <td>
+              <td className="ticket-data-cell assignee-cell">
+                <span className="mobile-cell-label" aria-hidden="true">
+                  Assignee
+                </span>
+                <span>{ticket.assignee?.name ?? 'Unassigned'}</span>
+              </td>
+              <td className="ticket-data-cell updated-cell">
+                <span className="mobile-cell-label" aria-hidden="true">
+                  Updated
+                </span>
                 <time dateTime={ticket.updatedAt}>
                   {dateFormatter.format(new Date(ticket.updatedAt))}
                 </time>

@@ -700,6 +700,11 @@ textarea {
   font-weight: 700;
 }
 
+.mobile-cell-label,
+.select-page-label {
+  display: none;
+}
+
 .selection-column {
   width: 2.75rem;
   padding-right: 0.25rem !important;
@@ -1442,6 +1447,10 @@ textarea {
 }
 
 @media (max-width: 44rem) {
+  body {
+    min-width: 0;
+  }
+
   .site-header p {
     display: none;
   }
@@ -1454,6 +1463,177 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .panel-heading,
+  .selection-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .result-meta {
+    justify-items: start;
+  }
+
+  .sort-summary {
+    white-space: normal;
+  }
+
+  .table-scroll {
+    overflow: visible;
+    margin-right: 0;
+    margin-left: 0;
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  .ticket-table {
+    display: block;
+    min-width: 0;
+  }
+
+  .ticket-table caption,
+  .ticket-table thead,
+  .ticket-table tbody {
+    display: block;
+  }
+
+  .ticket-table thead {
+    padding: 0.65rem;
+    border: 1px solid #dfe4ee;
+    border-radius: 0.75rem;
+    background: #f8f9fc;
+  }
+
+  .ticket-table thead tr {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .ticket-table thead th {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .ticket-table thead .selection-column {
+    display: flex;
+    flex: 1 1 100%;
+    gap: 0.55rem;
+    align-items: center;
+    justify-content: flex-start;
+    width: auto;
+    min-height: 2.4rem;
+    padding: 0 !important;
+    color: #526078;
+    text-align: left;
+  }
+
+  .select-page-label {
+    display: inline;
+  }
+
+  .ticket-table thead .sort-column {
+    flex: 1 1 calc(50% - 0.25rem);
+  }
+
+  .ticket-table thead .static-column-heading {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .ticket-table .sort-button {
+    justify-content: space-between;
+    width: 100%;
+    min-height: 2.6rem;
+    padding: 0.55rem 0.65rem;
+    margin: 0;
+    border: 1px solid #d8dde8;
+    border-radius: 0.5rem;
+    background: #ffffff;
+  }
+
+  .ticket-table tbody {
+    display: grid;
+    gap: 0.8rem;
+    margin-top: 0.8rem;
+  }
+
+  .ticket-table tbody tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    overflow: hidden;
+    border: 1px solid #dfe4ee;
+    border-radius: 0.75rem;
+    background: #ffffff;
+    box-shadow: 0 0.45rem 1.2rem rgb(31 42 76 / 6%);
+  }
+
+  .ticket-table tbody tr:focus-within {
+    border-color: #7c8cff;
+    box-shadow: 0 0 0 3px rgb(124 140 255 / 18%);
+  }
+
+  .ticket-table tbody th,
+  .ticket-table tbody td {
+    max-width: none;
+    border-bottom: 0;
+  }
+
+  .ticket-table tbody .selection-column {
+    grid-row: 1;
+    grid-column: 1;
+    align-self: stretch;
+    width: auto;
+    padding: 0.95rem 0.2rem 0.8rem 0.85rem !important;
+  }
+
+  .selection-column input {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+
+  .ticket-summary-cell {
+    grid-row: 1;
+    grid-column: 2;
+    min-width: 0;
+    padding: 0.75rem 0.9rem 0.7rem 0.4rem !important;
+  }
+
+  .ticket-title-button {
+    display: flex;
+    min-height: 2.75rem;
+    align-items: center;
+    overflow-wrap: anywhere;
+  }
+
+  .ticket-data-cell {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(5.5rem, 0.42fr) minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.6rem 0.9rem !important;
+    border-top: 1px solid #edf0f5;
+    overflow-wrap: anywhere;
+  }
+
+  .mobile-cell-label {
+    display: block;
+    color: #667187;
+    font-size: 0.67rem;
+    font-weight: 850;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
   .pagination {
     align-items: stretch;
     flex-direction: column;
@@ -1461,6 +1641,19 @@ textarea {
 
   .bulk-actions {
     grid-template-columns: 1fr;
+  }
+
+  .bulk-action-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .bulk-action-controls label {
+    grid-column: auto;
+  }
+
+  .bulk-action-controls select,
+  .bulk-action-controls .primary-button {
+    width: 100%;
   }
 
   .ticket-facts {
