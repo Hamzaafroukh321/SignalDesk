@@ -11,6 +11,7 @@ import {
 } from '../../domain/ticket'
 import {
   isAbortError,
+  type TicketChanges,
   type TicketRepository,
   type TicketSortField,
 } from '../../data/ticketRepository'
@@ -455,6 +456,27 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     setDetailRequestVersion((version) => version + 1)
   }
 
+  const saveActiveTicket = async (changes: TicketChanges) => {
+    if (detail?.status !== 'success') return
+    const saved = await repository.updateTicket({
+      id: detail.ticket.id,
+      expectedVersion: detail.ticket.version,
+      changes,
+    })
+    setDetail({ status: 'success', ticket: saved })
+    setList((current) => {
+      const snapshot = getSnapshot(current)
+      if (!snapshot) return current
+      const entities = new Map(snapshot.entities)
+      entities.set(saved.id, saved)
+      return {
+        status: 'loading',
+        previous: { ...snapshot, entities },
+      }
+    })
+    setRequestVersion((version) => version + 1)
+  }
+
   return (
     <>
       <section className="panel controls-panel" aria-labelledby="controls-title">
@@ -761,6 +783,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
           detail={detail}
           onClose={closeTicket}
           onRetry={retryTicket}
+          onSave={saveActiveTicket}
         />
       ) : null}
     </>

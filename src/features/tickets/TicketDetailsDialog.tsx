@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import {
   getPriorityLabel,
@@ -6,6 +6,8 @@ import {
   type Ticket,
   type TicketId,
 } from '../../domain/ticket'
+import type { TicketChanges } from '../../data/ticketRepository'
+import { TicketEditForm } from './TicketEditForm'
 
 export type TicketDetailResource =
   | { status: 'loading'; ticketId: TicketId }
@@ -16,6 +18,7 @@ interface TicketDetailsDialogProps {
   detail: TicketDetailResource
   onClose: () => void
   onRetry: () => void
+  onSave: (changes: TicketChanges) => Promise<void>
 }
 
 const dateTimeFormatter = new Intl.DateTimeFormat('en', {
@@ -32,11 +35,15 @@ export function TicketDetailsDialog({
   detail,
   onClose,
   onRetry,
+  onSave,
 }: TicketDetailsDialogProps) {
   const ticket = detail.status === 'success' ? detail.ticket : null
   const ticketId = detail.status === 'success' ? detail.ticket.id : detail.ticketId
   const dialogRef = useRef<HTMLDialogElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const editButtonRef = useRef<HTMLButtonElement>(null)
+  const [editing, setEditing] = useState(false)
+  const restoreEditFocusRef = useRef(false)
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
@@ -47,6 +54,18 @@ export function TicketDetailsDialog({
       document.body.style.overflow = previousOverflow
     }
   }, [])
+
+  useEffect(() => {
+    if (!editing && restoreEditFocusRef.current) {
+      restoreEditFocusRef.current = false
+      editButtonRef.current?.focus()
+    }
+  }, [editing])
+
+  const finishEditing = () => {
+    restoreEditFocusRef.current = true
+    setEditing(false)
+  }
 
   const handleDialogKeyDown = (event: KeyboardEvent<HTMLDialogElement>) => {
     if (event.defaultPrevented) return
@@ -107,14 +126,26 @@ export function TicketDetailsDialog({
               {ticket?.title ?? 'Ticket details'}
             </h2>
           </div>
-          <button
-            ref={closeButtonRef}
-            className="dialog-close"
-            type="button"
-            onClick={onClose}
-          >
-            Close details
-          </button>
+          <div className="dialog-header-actions">
+            {ticket && !editing ? (
+              <button
+                ref={editButtonRef}
+                className="secondary-button"
+                type="button"
+                onClick={() => setEditing(true)}
+              >
+                Edit ticket
+              </button>
+            ) : null}
+            <button
+              ref={closeButtonRef}
+              className="dialog-close"
+              type="button"
+              onClick={onClose}
+            >
+              Close details
+            </button>
+          </div>
         </div>
 
         {detail.status === 'loading' ? (
@@ -139,7 +170,18 @@ export function TicketDetailsDialog({
           </div>
         ) : null}
 
-        {ticket ? (
+        {ticket && editing ? (
+          <TicketEditForm
+            ticket={ticket}
+            onSave={async (changes) => {
+              await onSave(changes)
+              finishEditing()
+            }}
+            onCancel={finishEditing}
+          />
+        ) : null}
+
+        {ticket && !editing ? (
           <div className="ticket-detail-content">
             <dl className="ticket-facts">
               <div>

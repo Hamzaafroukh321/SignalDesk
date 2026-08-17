@@ -737,4 +737,115 @@ describe('SignalDesk application shell', () => {
     expect(trigger).toHaveFocus()
     expect(screen.getByRole('searchbox', { name: 'Search tickets' })).not.toHaveFocus()
   })
+
+  it('edits every core field and restores saved values when editing is cancelled', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    await screen.findByRole('table')
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+      }),
+    )
+    let dialog = await screen.findByRole('dialog', {
+      name: 'Invoice shows duplicate annual charge',
+    })
+    await user.click(within(dialog).getByRole('button', { name: 'Edit ticket' }))
+
+    let dialogScope = within(dialog)
+    const title = dialogScope.getByRole('textbox', { name: 'Title' })
+    expect(title).toHaveFocus()
+    expect(title).toHaveValue('Invoice shows duplicate annual charge')
+    expect(dialogScope.getByRole('combobox', { name: 'Status' })).toHaveValue('new')
+    expect(dialogScope.getByRole('combobox', { name: 'Priority' })).toHaveValue(
+      'urgent',
+    )
+    expect(dialogScope.getByRole('combobox', { name: 'Assignee' })).toHaveValue('')
+    expect(
+      (dialogScope.getByRole('textbox', {
+        name: 'Description',
+      }) as HTMLTextAreaElement).value,
+    ).toContain('finance team')
+    expect(dialogScope.getByRole('group', { name: 'Tags' })).toBeVisible()
+
+    await user.clear(title)
+    await user.type(title, 'A draft title that should be discarded')
+    await user.selectOptions(
+      dialogScope.getByRole('combobox', { name: 'Status' }),
+      'open',
+    )
+    await user.selectOptions(
+      dialogScope.getByRole('combobox', { name: 'Priority' }),
+      'normal',
+    )
+    await user.selectOptions(
+      dialogScope.getByRole('combobox', { name: 'Assignee' }),
+      'agent-amina',
+    )
+    await user.click(dialogScope.getByRole('checkbox', { name: 'Bug' }))
+    await user.click(dialogScope.getByRole('button', { name: 'Cancel editing' }))
+
+    expect(dialogScope.getByRole('button', { name: 'Edit ticket' })).toHaveFocus()
+    await user.click(dialogScope.getByRole('button', { name: 'Edit ticket' }))
+    dialog = screen.getByRole('dialog')
+    dialogScope = within(dialog)
+    expect(dialogScope.getByRole('textbox', { name: 'Title' })).toHaveValue(
+      'Invoice shows duplicate annual charge',
+    )
+    expect(dialogScope.getByRole('combobox', { name: 'Status' })).toHaveValue('new')
+    expect(dialogScope.getByRole('combobox', { name: 'Assignee' })).toHaveValue('')
+    expect(dialogScope.getByRole('checkbox', { name: 'Bug' })).not.toBeChecked()
+  })
+
+  it('saves edited fields and reconciles the dialog with the ticket row', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    await screen.findByRole('table')
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+      }),
+    )
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Invoice shows duplicate annual charge',
+    })
+    const dialogScope = within(dialog)
+    await user.click(dialogScope.getByRole('button', { name: 'Edit ticket' }))
+
+    const title = dialogScope.getByRole('textbox', { name: 'Title' })
+    await user.clear(title)
+    await user.type(title, 'Corrected annual invoice charge')
+    await user.selectOptions(
+      dialogScope.getByRole('combobox', { name: 'Status' }),
+      'open',
+    )
+    await user.selectOptions(
+      dialogScope.getByRole('combobox', { name: 'Priority' }),
+      'high',
+    )
+    await user.selectOptions(
+      dialogScope.getByRole('combobox', { name: 'Assignee' }),
+      'agent-amina',
+    )
+    await user.click(dialogScope.getByRole('checkbox', { name: 'Bug' }))
+    await user.click(dialogScope.getByRole('button', { name: 'Save ticket' }))
+
+    expect(
+      await screen.findByRole('dialog', {
+        name: 'Corrected annual invoice charge',
+      }),
+    ).toBeVisible()
+    expect(dialogScope.getByText('Amina Rahal')).toBeVisible()
+    expect(dialogScope.getByText('Bug')).toBeVisible()
+    expect(dialogScope.getByRole('button', { name: 'Edit ticket' })).toHaveFocus()
+    expect(
+      await screen.findByRole('button', {
+        name: 'Open SD-1048 details: Corrected annual invoice charge',
+      }),
+    ).toBeVisible()
+  })
 })

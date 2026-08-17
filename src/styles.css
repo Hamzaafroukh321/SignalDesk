@@ -765,6 +765,18 @@ textarea {
   line-height: 1.25;
 }
 
+.dialog-header-actions {
+  display: flex;
+  flex: none;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.dialog-header-actions .secondary-button {
+  margin-top: 0;
+  font-size: 0.75rem;
+}
+
 .dialog-close {
   flex: none;
   padding: 0.45rem 0.65rem;
@@ -805,6 +817,107 @@ textarea {
 
 .ticket-detail-content {
   padding: 1.4rem;
+}
+
+.ticket-edit-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  padding: 1.4rem;
+}
+
+.edit-field {
+  min-width: 0;
+}
+
+.full-field {
+  grid-column: 1 / -1;
+}
+
+.edit-field label,
+.tag-editor legend {
+  display: block;
+  padding: 0;
+  margin-bottom: 0.4rem;
+  color: #4d5870;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.edit-field input,
+.edit-field select,
+.edit-field textarea {
+  width: 100%;
+  padding: 0.58rem 0.68rem;
+  border: 1px solid #bdc5d4;
+  border-radius: 0.55rem;
+  color: #283249;
+  background: #ffffff;
+}
+
+.edit-field textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.edit-field input:focus-visible,
+.edit-field select:focus-visible,
+.edit-field textarea:focus-visible,
+.tag-editor input:focus-visible {
+  border-color: #6878df;
+  outline: 3px solid rgb(104 120 223 / 24%);
+  outline-offset: 1px;
+}
+
+.tag-editor {
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.tag-editor > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tag-editor label {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.38rem 0.55rem;
+  border: 1px solid #d5dae4;
+  border-radius: 999px;
+  color: #4d5870;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.tag-editor input {
+  width: 0.9rem;
+  height: 0.9rem;
+  margin: 0;
+  accent-color: #4654d6;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 0.65rem;
+  justify-content: flex-end;
+  padding-top: 1rem;
+  border-top: 1px solid #e3e6ed;
+}
+
+.edit-actions .secondary-button {
+  margin-top: 0;
+}
+
+.edit-save-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #a12634;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .ticket-facts {
@@ -1001,6 +1114,14 @@ textarea {
 
   .ticket-facts {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .ticket-edit-form {
+    grid-template-columns: 1fr;
+  }
+
+  .full-field {
+    grid-column: auto;
   }
 
   .pagination-actions button {
