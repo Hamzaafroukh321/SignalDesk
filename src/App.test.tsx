@@ -64,4 +64,65 @@ describe('SignalDesk application shell', () => {
       '10 tickets are ready for review.',
     )
   })
+
+  it('keeps the workspace visible while ticket results are loading', () => {
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 10_000 })} />,
+    )
+
+    expect(screen.getByRole('region', { name: 'Ticket controls' })).toBeVisible()
+    expect(screen.getByRole('region', { name: 'Ticket results' })).toHaveAttribute(
+      'aria-busy',
+      'true',
+    )
+    expect(screen.getByRole('heading', { name: 'Gathering the queue' })).toBeVisible()
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Loading the ticket queue…',
+    )
+  })
+
+  it('explains a valid empty queue', async () => {
+    render(
+      <App
+        repository={createTicketRepository({
+          initialTickets: [],
+          defaultLatencyMs: 0,
+        })}
+      />,
+    )
+
+    expect(
+      await screen.findByRole('heading', { name: 'No tickets in this queue' }),
+    ).toBeVisible()
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'No tickets match the current queue view.',
+    )
+  })
+
+  it('offers a retry after failure and moves focus to recovered results', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        repository={createTicketRepository({
+          defaultLatencyMs: 0,
+          plans: {
+            listTickets: [
+              { latencyMs: 0, fault: { message: 'Planned failure.' } },
+              { latencyMs: 0 },
+            ],
+          },
+        })}
+      />,
+    )
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Ticket results are unavailable')
+    const retry = screen.getByRole('button', { name: 'Retry loading tickets' })
+    await user.click(retry)
+
+    expect(await screen.findByRole('table')).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Ticket results' })).toHaveFocus()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
 })

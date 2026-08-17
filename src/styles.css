@@ -156,6 +156,12 @@ textarea {
   font-size: 1.25rem;
 }
 
+.panel h2:focus-visible {
+  border-radius: 0.2rem;
+  outline: 3px solid #7c8cff;
+  outline-offset: 0.25rem;
+}
+
 .panel > p {
   margin: 2.5rem 0 0;
   color: #6b7588;
@@ -177,6 +183,93 @@ textarea {
   background: #f8f9fc;
   font-size: 0.78rem;
   font-weight: 750;
+}
+
+.result-state {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  min-height: 8.5rem;
+  margin-top: 1.75rem;
+  padding: 1.25rem;
+  border: 1px solid #dfe4ee;
+  border-radius: 0.8rem;
+  color: #59657a;
+  background: #f9faff;
+}
+
+.result-state h3,
+.result-state p {
+  margin: 0;
+}
+
+.result-state h3 {
+  color: #2e3850;
+  font-size: 1rem;
+}
+
+.result-state p {
+  margin-top: 0.35rem;
+  line-height: 1.55;
+}
+
+.loading-mark,
+.empty-mark,
+.error-mark {
+  display: grid;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border-radius: 0.65rem;
+  color: #ffffff;
+  background: #6674dd;
+  font-weight: 850;
+}
+
+.loading-mark::after {
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 2px solid rgb(255 255 255 / 45%);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: loading-turn 750ms linear infinite;
+  content: '';
+}
+
+.empty-mark {
+  color: #536078;
+  background: #e7eaf1;
+}
+
+.error-state {
+  border-color: #efc5ca;
+  background: #fff7f8;
+}
+
+.error-mark {
+  background: #b53243;
+}
+
+.secondary-button {
+  margin-top: 1rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #bdc5d4;
+  border-radius: 0.55rem;
+  color: #2f3a51;
+  background: #ffffff;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.secondary-button:hover {
+  border-color: #8f9aaf;
+  background: #f5f7fb;
+}
+
+.secondary-button:focus-visible {
+  outline: 3px solid #7c8cff;
+  outline-offset: 2px;
 }
 
 .results-panel {
@@ -345,5 +438,15 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   .skip-link {
     transition: none;
+  }
+
+  .loading-mark::after {
+    animation: none;
+  }
+}
+
+@keyframes loading-turn {
+  to {
+    transform: rotate(1turn);
   }
 }
