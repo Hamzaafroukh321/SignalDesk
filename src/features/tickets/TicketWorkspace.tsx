@@ -25,6 +25,9 @@ interface TicketListSnapshot {
   ids: TicketId[]
   entities: ReadonlyMap<TicketId, Ticket>
   totalCount: number
+  page: number
+  totalPages: number
+  pageSize: number
 }
 
 type ListResource =
@@ -48,6 +51,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   const [priorities, setPriorities] = useState<TicketPriority[]>([])
   const [sortBy, setSortBy] = useState<TicketSortField>('updatedAt')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [currentPage, setCurrentPage] = useState(1)
   const resultsHeadingRef = useRef<HTMLHeadingElement>(null)
   const focusResultsAfterRetryRef = useRef(false)
   const latestRequestRef = useRef(0)
@@ -59,7 +63,15 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
 
     void repository
       .listTickets(
-        { search, statuses, priorities, sortBy, sortDirection },
+        {
+          search,
+          statuses,
+          priorities,
+          sortBy,
+          sortDirection,
+          page: currentPage,
+          pageSize: 10,
+        },
         { signal: controller.signal },
       )
       .then((page) => {
@@ -72,8 +84,12 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
               page.tickets.map((ticket) => [ticket.id, ticket] as const),
             ),
             totalCount: page.totalCount,
+            page: page.page,
+            totalPages: page.totalPages,
+            pageSize: page.pageSize,
           },
         })
+        if (page.page !== currentPage) setCurrentPage(page.page)
       })
       .catch((error: unknown) => {
         if (
@@ -94,6 +110,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       controller.abort()
     }
   }, [
+    currentPage,
     priorities,
     repository,
     requestVersion,
@@ -135,11 +152,13 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
 
   const beginSearch = (value: string) => {
     markResultsUpdating()
+    setCurrentPage(1)
     setSearch(value)
   }
 
   const setStatusFilter = (status: TicketStatus, checked: boolean) => {
     markResultsUpdating()
+    setCurrentPage(1)
     setStatuses((current) =>
       ticketStatuses.filter((candidate) =>
         candidate === status ? checked : current.includes(candidate),
@@ -152,6 +171,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     checked: boolean,
   ) => {
     markResultsUpdating()
+    setCurrentPage(1)
     setPriorities((current) =>
       ticketPriorities.filter((candidate) =>
         candidate === priority ? checked : current.includes(candidate),
@@ -161,12 +181,14 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
 
   const clearFilters = () => {
     markResultsUpdating()
+    setCurrentPage(1)
     setStatuses([])
     setPriorities([])
   }
 
   const sortTickets = (field: TicketSortField) => {
     markResultsUpdating()
+    setCurrentPage(1)
     if (field === sortBy) {
       setSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'))
       return
@@ -182,6 +204,11 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     status: 'Status',
     priority: 'Priority',
     updatedAt: 'Updated time',
+  }
+
+  const goToPage = (page: number) => {
+    markResultsUpdating()
+    setCurrentPage(page)
   }
 
   return (
@@ -350,6 +377,39 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
             </button>
           </div>
         </div>
+      ) : null}
+
+      {visibleSnapshot ? (
+        <nav className="pagination" aria-label="Ticket result pages">
+          <p>
+            Page {visibleSnapshot.page} of {visibleSnapshot.totalPages} ·{' '}
+            {visibleSnapshot.totalCount}{' '}
+            {visibleSnapshot.totalCount === 1 ? 'result' : 'results'}
+          </p>
+          <div className="pagination-actions">
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={
+                list.status === 'loading' || visibleSnapshot.page <= 1
+              }
+              onClick={() => goToPage(visibleSnapshot.page - 1)}
+            >
+              Previous page
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={
+                list.status === 'loading' ||
+                visibleSnapshot.page >= visibleSnapshot.totalPages
+              }
+              onClick={() => goToPage(visibleSnapshot.page + 1)}
+            >
+              Next page
+            </button>
+          </div>
+        </nav>
       ) : null}
 
       <div className="status-area">

@@ -405,6 +405,38 @@ textarea {
   outline-offset: 2px;
 }
 
+.secondary-button:disabled {
+  border-color: #dfe3eb;
+  color: #98a1b1;
+  background: #f5f6f8;
+  cursor: not-allowed;
+}
+
+.pagination {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1.25rem;
+}
+
+.pagination p {
+  margin: 0;
+  color: #647086;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.pagination-actions {
+  display: flex;
+  gap: 0.55rem;
+}
+
+.pagination-actions .secondary-button {
+  margin-top: 0;
+  font-size: 0.78rem;
+}
+
 .results-panel {
   min-width: 0;
   background:
@@ -601,6 +633,15 @@ textarea {
 
   .filter-groups {
     grid-template-columns: 1fr;
+  }
+
+  .pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pagination-actions button {
+    flex: 1;
   }
 }
 

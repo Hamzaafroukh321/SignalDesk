@@ -271,4 +271,38 @@ describe('SignalDesk application shell', () => {
       'Workspace import needs field mapping help',
     )
   })
+
+  it('navigates valid pages and resets a reduced result set to page one', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+
+    expect(await screen.findByText('Page 1 of 3 · 24 results')).toBeVisible()
+    const previous = screen.getByRole('button', { name: 'Previous page' })
+    const next = screen.getByRole('button', { name: 'Next page' })
+    expect(previous).toBeDisabled()
+    expect(next).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Ticket' }))
+    await screen.findByText('Sorted by Ticket title · Ascending')
+    await user.click(next)
+    expect(await screen.findByText('Page 2 of 3 · 24 results')).toBeVisible()
+    expect(previous).toBeEnabled()
+    expect(next).toBeEnabled()
+    expect(screen.getByText('Sorted by Ticket title · Ascending')).toBeVisible()
+
+    await user.click(next)
+    expect(await screen.findByText('Page 3 of 3 · 24 results')).toBeVisible()
+    expect(previous).toBeEnabled()
+    expect(next).toBeDisabled()
+
+    const search = screen.getByRole('searchbox', { name: 'Search tickets' })
+    await user.type(search, 'Billing')
+    expect(await screen.findByText('Page 1 of 1 · 5 results')).toBeVisible()
+    expect(search).toHaveValue('Billing')
+    expect(screen.getByText('Sorted by Ticket title · Ascending')).toBeVisible()
+    expect(previous).toBeDisabled()
+    expect(next).toBeDisabled()
+  })
 })
