@@ -208,6 +208,7 @@ export function TicketDetailsDialog({
               ref={closeButtonRef}
               className="dialog-close"
               type="button"
+              aria-keyshortcuts="Escape"
               onClick={onClose}
             >
               Close details

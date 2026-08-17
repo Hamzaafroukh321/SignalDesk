@@ -78,6 +78,15 @@ function getDetailTicketId(detail: TicketDetailResource) {
   return detail.status === 'success' ? detail.ticket.id : detail.ticketId
 }
 
+function isEditableShortcutTarget(target: EventTarget | null) {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  )
+}
+
 function applyTicketChanges(ticket: Ticket, changes: TicketChanges): Ticket {
   return {
     ...ticket,
@@ -124,6 +133,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     page: currentPage,
     pageSize,
   } = listState
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const resultsHeadingRef = useRef<HTMLHeadingElement>(null)
   const focusResultsAfterRetryRef = useRef(false)
   const latestRequestRef = useRef(0)
@@ -264,6 +274,30 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       resultsHeadingRef.current?.focus()
     }
   }, [list.status])
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (
+        event.key !== '/' ||
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.repeat ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        activeTicketIdRef.current !== null ||
+        isEditableShortcutTarget(event.target)
+      ) {
+        return
+      }
+
+      event.preventDefault()
+      searchInputRef.current?.focus()
+    }
+
+    window.addEventListener('keydown', handleShortcut)
+    return () => window.removeEventListener('keydown', handleShortcut)
+  }, [])
 
   useEffect(() => {
     if (!activeTicketId) return
@@ -752,6 +786,19 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
           <h2 id="controls-title">Ticket controls</h2>
         </div>
 
+        <p className="shortcut-help">
+          <span className="shortcut-label">Keyboard shortcuts</span>
+          <span>
+            <kbd>/</kbd> Focus search
+          </span>
+          <span className="shortcut-divider" aria-hidden="true">
+            ·
+          </span>
+          <span>
+            <kbd>Esc</kbd> Close details or return to editing
+          </span>
+        </p>
+
         <div className="search-control">
           <label htmlFor="ticket-search">Search tickets</label>
           <p id="ticket-search-hint">
@@ -759,9 +806,11 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
           </p>
           <div className="search-input-row">
             <input
+              ref={searchInputRef}
               id="ticket-search"
               type="search"
               value={search}
+              aria-keyshortcuts="/"
               aria-describedby="ticket-search-hint"
               onChange={(event) => beginSearch(event.currentTarget.value)}
             />

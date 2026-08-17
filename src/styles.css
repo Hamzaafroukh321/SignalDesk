@@ -215,6 +215,42 @@ textarea {
   margin-top: 2rem;
 }
 
+.panel > .shortcut-help {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.65rem;
+  align-items: center;
+  margin: 1.15rem 0 0;
+  color: #667187;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.shortcut-label {
+  color: #45516a;
+  font-weight: 800;
+}
+
+.shortcut-help kbd {
+  display: inline-grid;
+  min-width: 1.55rem;
+  min-height: 1.4rem;
+  padding: 0 0.35rem;
+  place-items: center;
+  border: 1px solid #cbd1de;
+  border-bottom-width: 2px;
+  border-radius: 0.35rem;
+  color: #35415a;
+  background: #f8f9fc;
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.shortcut-divider {
+  color: #a1a8b7;
+}
+
 .search-control label {
   display: block;
   color: #2c3650;
