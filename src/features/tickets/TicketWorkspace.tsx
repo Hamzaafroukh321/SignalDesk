@@ -74,6 +74,10 @@ function getSnapshot(list: ListResource): TicketListSnapshot | null {
   return list.previous
 }
 
+function getDetailTicketId(detail: TicketDetailResource) {
+  return detail.status === 'success' ? detail.ticket.id : detail.ticketId
+}
+
 function applyTicketChanges(ticket: Ticket, changes: TicketChanges): Ticket {
   return {
     ...ticket,
@@ -124,6 +128,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   const focusResultsAfterRetryRef = useRef(false)
   const latestRequestRef = useRef(0)
   const latestDetailRequestRef = useRef(0)
+  const activeTicketIdRef = useRef<TicketId | null>(null)
   const saveOperationSequenceRef = useRef(0)
   const latestSaveByTicketRef = useRef<Map<TicketId, number>>(new Map())
   const noteOperationSequenceRef = useRef(0)
@@ -267,21 +272,23 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     const requestId = latestDetailRequestRef.current + 1
     latestDetailRequestRef.current = requestId
     const ticketId = activeTicketId
+    const isCurrentRequest = () =>
+      requestId === latestDetailRequestRef.current &&
+      activeTicketIdRef.current === ticketId
 
     void repository
       .getTicket(ticketId, { signal: controller.signal })
       .then((ticket) => {
-        if (requestId === latestDetailRequestRef.current) {
-          setDetail({ status: 'success', ticket })
-        }
+        if (!isCurrentRequest() || ticket.id !== ticketId) return
+        setDetail((current) =>
+          isCurrentRequest() ? { status: 'success', ticket } : current,
+        )
       })
       .catch((error: unknown) => {
-        if (
-          requestId === latestDetailRequestRef.current &&
-          !isAbortError(error)
-        ) {
-          setDetail({ status: 'error', ticketId })
-        }
+        if (!isCurrentRequest() || isAbortError(error)) return
+        setDetail((current) =>
+          isCurrentRequest() ? { status: 'error', ticketId } : current,
+        )
       })
 
     return () => {
@@ -321,13 +328,23 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       })
     : []
 
+  const currentDetail =
+    detail &&
+    activeTicketId &&
+    getDetailTicketId(detail) === activeTicketId
+      ? detail
+      : null
+
   const visibleDetail: TicketDetailResource | null =
-    detail?.status === 'success' && optimisticSaves.has(detail.ticket.id)
+    currentDetail?.status === 'success' &&
+    optimisticSaves.has(currentDetail.ticket.id)
       ? {
           status: 'success',
-          ticket: optimisticSaves.get(detail.ticket.id)?.ticket ?? detail.ticket,
+          ticket:
+            optimisticSaves.get(currentDetail.ticket.id)?.ticket ??
+            currentDetail.ticket,
         }
-      : detail
+      : currentDetail
 
   const markResultsUpdating = () => {
     setList((current) => ({
@@ -540,7 +557,13 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
 
   const bulkPending = bulkUpdate.status === 'pending'
 
+  const setDetailTarget = (id: TicketId | null) => {
+    activeTicketIdRef.current = id
+    latestDetailRequestRef.current += 1
+  }
+
   const performOpenTicket = (id: TicketId, trigger: HTMLButtonElement) => {
+    setDetailTarget(id)
     dialogTriggerRef.current = { id, element: trigger }
     setEditDirty(false)
     setPendingDialogIntent(null)
@@ -549,8 +572,8 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   }
 
   const openTicket = (id: TicketId, trigger: HTMLButtonElement) => {
-    if (activeTicketId === id) return
-    if (activeTicketId && editDirty) {
+    if (activeTicketIdRef.current === id) return
+    if (activeTicketIdRef.current && editDirty) {
       setPendingDialogIntent({ kind: 'switch', id, trigger })
       return
     }
@@ -558,6 +581,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   }
 
   const performCloseTicket = () => {
+    setDetailTarget(null)
     pendingFocusRestoreRef.current = true
     setEditDirty(false)
     setPendingDialogIntent(null)
@@ -583,14 +607,17 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   }
 
   const retryTicket = () => {
-    if (!activeTicketId) return
-    setDetail({ status: 'loading', ticketId: activeTicketId })
+    const ticketId = activeTicketIdRef.current
+    if (!ticketId) return
+    setDetailTarget(ticketId)
+    setDetail({ status: 'loading', ticketId })
     setDetailRequestVersion((version) => version + 1)
   }
 
   const reconcileAuthoritativeTicket = (ticket: Ticket) => {
     setDetail((current) => {
       if (!current) return current
+      if (activeTicketIdRef.current !== ticket.id) return current
       const currentId =
         current.status === 'success' ? current.ticket.id : current.ticketId
       if (currentId !== ticket.id) return current
@@ -620,7 +647,12 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   }
 
   const saveActiveTicket = async (changes: TicketChanges) => {
-    if (detail?.status !== 'success') return
+    if (
+      detail?.status !== 'success' ||
+      detail.ticket.id !== activeTicketIdRef.current
+    ) {
+      return
+    }
     const baseline = detail.ticket
     const operationId = saveOperationSequenceRef.current + 1
     saveOperationSequenceRef.current = operationId
@@ -671,7 +703,12 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   }
 
   const addNoteToActiveTicket = async (body: string) => {
-    if (detail?.status !== 'success') return
+    if (
+      detail?.status !== 'success' ||
+      detail.ticket.id !== activeTicketIdRef.current
+    ) {
+      return
+    }
     const baseline = detail.ticket
     const operationId = noteOperationSequenceRef.current + 1
     noteOperationSequenceRef.current = operationId
@@ -1035,9 +1072,10 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       </section>
       {visibleDetail ? (
         <TicketDetailsDialog
+          key={activeTicketId}
           detail={visibleDetail}
           authoritativeTicket={
-            detail?.status === 'success' ? detail.ticket : null
+            currentDetail?.status === 'success' ? currentDetail.ticket : null
           }
           onClose={closeTicket}
           onRetry={retryTicket}
