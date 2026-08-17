@@ -1217,4 +1217,147 @@ describe('SignalDesk application shell', () => {
       }),
     ).toBeVisible()
   })
+
+  it('rejects a blank activity note with associated feedback and useful focus', async () => {
+    const user = userEvent.setup()
+    const repository = createTicketRepository({ defaultLatencyMs: 0 })
+    const addNoteSpy = vi.spyOn(repository, 'addTicketNote')
+    render(<App repository={repository} />)
+    await screen.findByRole('table')
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+      }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    const dialogScope = within(dialog)
+    const note = dialogScope.getByRole('textbox', { name: 'Note' })
+
+    await user.type(note, '   ')
+    await user.click(dialogScope.getByRole('button', { name: 'Add note' }))
+
+    expect(dialogScope.getByRole('alert')).toHaveTextContent(
+      'Enter a note before submitting.',
+    )
+    expect(note).toHaveAttribute('aria-invalid', 'true')
+    expect(note).toHaveAccessibleDescription('Enter a note before submitting.')
+    expect(note).toHaveFocus()
+    expect(addNoteSpy).not.toHaveBeenCalled()
+  })
+
+  it('adds a confirmed note at the end of activity and restores composer focus', async () => {
+    const user = userEvent.setup()
+    const repository = createTicketRepository({ defaultLatencyMs: 0 })
+    const addTicketNote = repository.addTicketNote.bind(repository)
+    let releaseNote: (() => void) | undefined
+    const noteGate = new Promise<void>((resolve) => {
+      releaseNote = resolve
+    })
+    const addNoteSpy = vi
+      .spyOn(repository, 'addTicketNote')
+      .mockImplementation(async (command, options) => {
+        await noteGate
+        return addTicketNote(command, options)
+      })
+    render(<App repository={repository} />)
+    await screen.findByRole('table')
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+      }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    const dialogScope = within(dialog)
+    const activity = dialogScope.getByRole('list', { name: 'Activity' })
+    const initialActivityItems = within(activity).getAllByRole('listitem')
+    const initialActivityIds = initialActivityItems.map((item) =>
+      item.getAttribute('data-activity-id'),
+    )
+    const initialActivityCount = initialActivityItems.length
+    const note = dialogScope.getByRole('textbox', { name: 'Note' })
+    await user.type(note, 'Customer confirmed the corrected invoice total.')
+    await user.click(dialogScope.getByRole('button', { name: 'Add note' }))
+
+    expect(
+      dialogScope.getByRole('button', { name: 'Adding note…' }),
+    ).toBeDisabled()
+    expect(note).toBeDisabled()
+    expect(note).toHaveValue('Customer confirmed the corrected invoice total.')
+    expect(note.closest('form')).toHaveAttribute('aria-busy', 'true')
+    expect(addNoteSpy).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      releaseNote?.()
+      await noteGate
+    })
+    expect(
+      await dialogScope.findByText(
+        'Customer confirmed the corrected invoice total.',
+        { selector: '.activity-list p' },
+      ),
+    ).toBeVisible()
+    const updatedDialogScope = within(screen.getByRole('dialog'))
+    const updatedActivity = updatedDialogScope.getByRole('list', {
+      name: 'Activity',
+    })
+    const activityItems = within(updatedActivity).getAllByRole('listitem')
+    expect(activityItems).toHaveLength(initialActivityCount + 1)
+    expect(
+      activityItems
+        .slice(0, initialActivityCount)
+        .map((item) => item.getAttribute('data-activity-id')),
+    ).toEqual(initialActivityIds)
+    const newestActivity = activityItems[activityItems.length - 1]
+    expect(newestActivity).toHaveTextContent(
+      'Customer confirmed the corrected invoice total.',
+    )
+    expect(newestActivity?.getAttribute('data-activity-id')).toMatch(
+      /^SD-1048-note-v\d+$/,
+    )
+    const clearedNote = updatedDialogScope.getByRole('textbox', { name: 'Note' })
+    expect(clearedNote).toHaveValue('')
+    await waitFor(() => expect(clearedNote).toHaveFocus())
+    expect(screen.getByTestId('polite-operation-announcements')).toHaveTextContent(
+      'Note added to SD-1048.',
+    )
+  })
+
+  it('retains note text and offers retry after a repository failure', async () => {
+    const user = userEvent.setup()
+    const repository = createTicketRepository({
+      defaultLatencyMs: 0,
+      plans: {
+        addTicketNote: [
+          { fault: { message: 'The note service is unavailable.' } },
+        ],
+      },
+    })
+    render(<App repository={repository} />)
+    await screen.findByRole('table')
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+      }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    const dialogScope = within(dialog)
+    const note = dialogScope.getByRole('textbox', { name: 'Note' })
+    const attemptedNote = 'Keep this note available after failure.'
+    await user.type(note, attemptedNote)
+    await user.click(dialogScope.getByRole('button', { name: 'Add note' }))
+
+    expect(
+      await dialogScope.findByText(
+        'The note could not be added. Your text is still here; try again.',
+      ),
+    ).toBeVisible()
+    expect(note).toHaveValue(attemptedNote)
+    expect(note).toBeEnabled()
+    expect(note).toHaveFocus()
+    expect(dialogScope.getByRole('button', { name: 'Retry note' })).toBeEnabled()
+    expect(dialogScope.queryByText(attemptedNote, { selector: '.activity-list p' })).not.toBeInTheDocument()
+    expect(
+      screen.getByTestId('assertive-operation-announcements'),
+    ).toHaveTextContent('Note not added to SD-1048. Note text retained for retry.')
+  })
 })

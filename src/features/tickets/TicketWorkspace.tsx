@@ -112,6 +112,8 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   const latestDetailRequestRef = useRef(0)
   const saveOperationSequenceRef = useRef(0)
   const latestSaveByTicketRef = useRef<Map<TicketId, number>>(new Map())
+  const noteOperationSequenceRef = useRef(0)
+  const latestNoteByTicketRef = useRef<Map<TicketId, number>>(new Map())
   const dialogTriggerRef = useRef<{
     id: TicketId
     element: HTMLButtonElement
@@ -517,6 +519,37 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     setDetailRequestVersion((version) => version + 1)
   }
 
+  const reconcileAuthoritativeTicket = (ticket: Ticket) => {
+    setDetail((current) => {
+      if (!current) return current
+      const currentId =
+        current.status === 'success' ? current.ticket.id : current.ticketId
+      if (currentId !== ticket.id) return current
+      if (
+        current.status === 'success' &&
+        current.ticket.version > ticket.version
+      ) {
+        return current
+      }
+      return { status: 'success', ticket }
+    })
+    setList((current) => {
+      const snapshot = getSnapshot(current)
+      if (!snapshot) return current
+      const entities = new Map(snapshot.entities)
+      const existing = entities.get(ticket.id)
+      if (!existing || existing.version <= ticket.version) {
+        entities.set(ticket.id, ticket)
+      }
+      return {
+        status: 'loading',
+        previous: { ...snapshot, entities },
+      }
+    })
+    listAnnouncementIntentRef.current = null
+    setRequestVersion((version) => version + 1)
+  }
+
   const saveActiveTicket = async (changes: TicketChanges) => {
     if (detail?.status !== 'success') return
     const baseline = detail.ticket
@@ -531,37 +564,6 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       })
       return next
     })
-
-    const reconcileAuthoritativeTicket = (ticket: Ticket) => {
-      setDetail((current) => {
-        if (!current) return current
-        const currentId =
-          current.status === 'success' ? current.ticket.id : current.ticketId
-        if (currentId !== ticket.id) return current
-        if (
-          current.status === 'success' &&
-          current.ticket.version > ticket.version
-        ) {
-          return current
-        }
-        return { status: 'success', ticket }
-      })
-      setList((current) => {
-        const snapshot = getSnapshot(current)
-        if (!snapshot) return current
-        const entities = new Map(snapshot.entities)
-        const existing = entities.get(ticket.id)
-        if (!existing || existing.version <= ticket.version) {
-          entities.set(ticket.id, ticket)
-        }
-        return {
-          status: 'loading',
-          previous: { ...snapshot, entities },
-        }
-      })
-      listAnnouncementIntentRef.current = null
-      setRequestVersion((version) => version + 1)
-    }
 
     try {
       const saved = await repository.updateTicket({
@@ -595,6 +597,43 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       })
       if (latestSaveByTicketRef.current.get(baseline.id) === operationId) {
         latestSaveByTicketRef.current.delete(baseline.id)
+      }
+    }
+  }
+
+  const addNoteToActiveTicket = async (body: string) => {
+    if (detail?.status !== 'success') return
+    const baseline = detail.ticket
+    const operationId = noteOperationSequenceRef.current + 1
+    noteOperationSequenceRef.current = operationId
+    latestNoteByTicketRef.current.set(baseline.id, operationId)
+
+    try {
+      const saved = await repository.addTicketNote({
+        id: baseline.id,
+        expectedVersion: baseline.version,
+        body,
+      })
+      reconcileAuthoritativeTicket(saved)
+      if (latestNoteByTicketRef.current.get(baseline.id) === operationId) {
+        announce(`Note added to ${saved.id}.`)
+      }
+    } catch (error) {
+      if (error instanceof TicketVersionConflictError) {
+        reconcileAuthoritativeTicket(error.currentTicket)
+      }
+      if (latestNoteByTicketRef.current.get(baseline.id) === operationId) {
+        announce(
+          error instanceof TicketVersionConflictError
+            ? `Note not added to ${baseline.id}. A newer ticket version was restored; note text retained.`
+            : `Note not added to ${baseline.id}. Note text retained for retry.`,
+          { priority: 'assertive' },
+        )
+      }
+      throw error
+    } finally {
+      if (latestNoteByTicketRef.current.get(baseline.id) === operationId) {
+        latestNoteByTicketRef.current.delete(baseline.id)
       }
     }
   }
@@ -906,6 +945,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
           onClose={closeTicket}
           onRetry={retryTicket}
           onSave={saveActiveTicket}
+          onAddNote={addNoteToActiveTicket}
         />
       ) : null}
     </>

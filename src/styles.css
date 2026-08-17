@@ -1071,6 +1071,70 @@ textarea {
   font-size: 0.7rem;
 }
 
+.note-composer {
+  padding-top: 1.1rem;
+  margin-top: 1.2rem;
+  border-top: 1px solid #e3e6ed;
+}
+
+.note-composer h3 {
+  margin: 0 0 0.7rem;
+  color: #25314a;
+  font-size: 0.9rem;
+}
+
+.note-composer form {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.note-composer label {
+  color: #4d5870;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.note-composer textarea {
+  width: 100%;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid #bdc5d4;
+  border-radius: 0.55rem;
+  color: #283249;
+  background: #ffffff;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.note-composer textarea[aria-invalid='true'] {
+  border-color: #b52e40;
+}
+
+.note-composer textarea:focus-visible {
+  border-color: #6878df;
+  outline: 3px solid rgb(104 120 223 / 24%);
+  outline-offset: 1px;
+}
+
+.note-hint,
+.note-error {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.note-hint {
+  color: #657087;
+}
+
+.note-error {
+  color: #a12634;
+  font-weight: 700;
+}
+
+.note-composer .primary-button {
+  justify-self: start;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

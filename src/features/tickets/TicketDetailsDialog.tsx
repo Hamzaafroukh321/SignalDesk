@@ -8,6 +8,7 @@ import {
 } from '../../domain/ticket'
 import type { TicketChanges } from '../../data/ticketRepository'
 import { TicketEditForm } from './TicketEditForm'
+import { TicketNoteComposer } from './TicketNoteComposer'
 
 export type TicketDetailResource =
   | { status: 'loading'; ticketId: TicketId }
@@ -19,6 +20,7 @@ interface TicketDetailsDialogProps {
   onClose: () => void
   onRetry: () => void
   onSave: (changes: TicketChanges) => Promise<void>
+  onAddNote: (body: string) => Promise<void>
 }
 
 const dateTimeFormatter = new Intl.DateTimeFormat('en', {
@@ -36,6 +38,7 @@ export function TicketDetailsDialog({
   onClose,
   onRetry,
   onSave,
+  onAddNote,
 }: TicketDetailsDialogProps) {
   const ticket = detail.status === 'success' ? detail.ticket : null
   const ticketId = detail.status === 'success' ? detail.ticket.id : detail.ticketId
@@ -234,9 +237,9 @@ export function TicketDetailsDialog({
 
             <section className="detail-section" aria-labelledby="activity-title">
               <h3 id="activity-title">Activity</h3>
-              <ol className="activity-list">
+              <ol className="activity-list" aria-labelledby="activity-title">
                 {ticket.activities.map((activity) => (
-                  <li key={activity.id}>
+                  <li key={activity.id} data-activity-id={activity.id}>
                     <p>{activity.message}</p>
                     <span>
                       {activity.author} ·{' '}
@@ -248,6 +251,8 @@ export function TicketDetailsDialog({
                 ))}
               </ol>
             </section>
+
+            <TicketNoteComposer onAddNote={onAddNote} />
           </div>
         ) : null}
       </dialog>
