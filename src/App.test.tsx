@@ -497,4 +497,99 @@ describe('SignalDesk application shell', () => {
     expect(screen.getByText('10 tickets selected')).toBeVisible()
     expect(screen.getByText('· 0 on this page, 10 outside this view')).toBeVisible()
   })
+
+  it('applies one status to every selected ticket and clears selection on success', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    await screen.findByRole('table')
+
+    const apply = screen.getByRole('button', { name: 'Apply status' })
+    expect(apply).toBeDisabled()
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: 'Select SD-1048: Invoice shows duplicate annual charge',
+      }),
+    )
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: 'Select SD-1062: Export finished with missing rows',
+      }),
+    )
+    await user.selectOptions(
+      screen.getByRole('combobox', {
+        name: 'New status for selected tickets',
+      }),
+      'resolved',
+    )
+    await user.click(apply)
+
+    expect(
+      await screen.findByText(
+        'Applied Resolved to 2 tickets. Selection cleared.',
+      ),
+    ).toBeVisible()
+    expect(screen.getByText('0 tickets selected')).toBeVisible()
+    expect(apply).toBeDisabled()
+
+    for (const label of [
+      'Select SD-1048: Invoice shows duplicate annual charge',
+      'Select SD-1062: Export finished with missing rows',
+    ]) {
+      const checkbox = await screen.findByRole('checkbox', { name: label })
+      const row = checkbox.closest('tr')
+      expect(row).not.toBeNull()
+      expect(within(row as HTMLTableRowElement).getByText('Resolved')).toBeVisible()
+    }
+  })
+
+  it('locks conflicting controls while bulk work is pending and preserves selection on failure', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        repository={createTicketRepository({
+          defaultLatencyMs: 0,
+          plans: {
+            bulkUpdateStatus: [
+              {
+                latencyMs: 120,
+                fault: { message: 'Planned bulk failure.' },
+              },
+            ],
+          },
+        })}
+      />,
+    )
+    await screen.findByRole('table')
+
+    const rowSelection = screen.getByRole('checkbox', {
+      name: 'Select SD-1048: Invoice shows duplicate annual charge',
+    })
+    await user.click(rowSelection)
+    const apply = screen.getByRole('button', { name: 'Apply status' })
+    const statusChoice = screen.getByRole('combobox', {
+      name: 'New status for selected tickets',
+    })
+    await user.click(apply)
+
+    expect(screen.getByText('Updating 1 ticket…')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Applying status…' })).toBeDisabled()
+    expect(statusChoice).toBeDisabled()
+    expect(rowSelection).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Clear selection' })).toBeDisabled()
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(
+      'Bulk update failed. Your 1 selected ticket remains selected. Try again.',
+    )
+    expect(screen.getByText('1 ticket selected')).toBeVisible()
+    expect(rowSelection).toBeChecked()
+    expect(rowSelection).toBeEnabled()
+    expect(statusChoice).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Apply status' })).toBeEnabled()
+    expect(
+      screen.queryByText(/Selection cleared/),
+    ).not.toBeInTheDocument()
+  })
 })

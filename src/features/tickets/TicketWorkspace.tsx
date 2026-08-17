@@ -40,6 +40,12 @@ type ListResource =
   | { status: 'success'; snapshot: TicketListSnapshot }
   | { status: 'error'; previous: TicketListSnapshot | null }
 
+type BulkUpdateState =
+  | { status: 'idle' }
+  | { status: 'pending'; count: number }
+  | { status: 'success'; message: string }
+  | { status: 'error'; message: string }
+
 function getSnapshot(list: ListResource): TicketListSnapshot | null {
   if (list.status === 'success') return list.snapshot
   return list.previous
@@ -52,6 +58,8 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   })
   const [requestVersion, setRequestVersion] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<TicketId>>(() => new Set())
+  const [bulkStatus, setBulkStatus] = useState<TicketStatus>('pending')
+  const [bulkUpdate, setBulkUpdate] = useState<BulkUpdateState>({ status: 'idle' })
   const [listState, setListState] = useState(() =>
     parseTicketListState(window.location.search),
   )
@@ -89,18 +97,20 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       )
       .then((page) => {
         if (requestId !== latestRequestRef.current) return
-        setList({
-          status: 'success',
-          snapshot: {
-            ids: page.tickets.map((ticket) => ticket.id),
-            entities: new Map(
-              page.tickets.map((ticket) => [ticket.id, ticket] as const),
-            ),
-            totalCount: page.totalCount,
-            page: page.page,
-            totalPages: page.totalPages,
-            pageSize: page.pageSize,
-          },
+        setList((current) => {
+          const entities = new Map(getSnapshot(current)?.entities ?? [])
+          page.tickets.forEach((ticket) => entities.set(ticket.id, ticket))
+          return {
+            status: 'success',
+            snapshot: {
+              ids: page.tickets.map((ticket) => ticket.id),
+              entities,
+              totalCount: page.totalCount,
+              page: page.page,
+              totalPages: page.totalPages,
+              pageSize: page.pageSize,
+            },
+          }
         })
         if (page.page !== currentPage) {
           const correctedState = {
@@ -305,6 +315,64 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     })
   }
 
+  const applyBulkStatus = async () => {
+    const snapshot = getSnapshot(list)
+    if (!snapshot || !selectedIds.size || bulkUpdate.status === 'pending') return
+
+    const selectedTickets = [...selectedIds].map((id) => snapshot.entities.get(id))
+    if (selectedTickets.some((ticket) => !ticket)) {
+      setBulkUpdate({
+        status: 'error',
+        message:
+          'The selected tickets are no longer available. Refresh the queue and try again.',
+      })
+      return
+    }
+
+    const availableTickets = selectedTickets.filter(
+      (ticket): ticket is Ticket => ticket !== undefined,
+    )
+    const count = availableTickets.length
+    setBulkUpdate({ status: 'pending', count })
+    try {
+      const result = await repository.bulkUpdateStatus({
+        status: bulkStatus,
+        targets: availableTickets.map((ticket) => ({
+          id: ticket.id,
+          expectedVersion: ticket.version,
+        })),
+      })
+
+      setList((current) => {
+        const currentSnapshot = getSnapshot(current)
+        if (!currentSnapshot) return current
+        const entities = new Map(currentSnapshot.entities)
+        result.tickets.forEach((ticket) => entities.set(ticket.id, ticket))
+        return {
+          status: 'loading',
+          previous: { ...currentSnapshot, entities },
+        }
+      })
+      setSelectedIds(new Set())
+      setBulkUpdate({
+        status: 'success',
+        message: `Applied ${getStatusLabel(bulkStatus)} to ${count} ${
+          count === 1 ? 'ticket' : 'tickets'
+        }. Selection cleared.`,
+      })
+      setRequestVersion((version) => version + 1)
+    } catch {
+      setBulkUpdate({
+        status: 'error',
+        message: `Bulk update failed. Your ${count} selected ${
+          count === 1 ? 'ticket remains' : 'tickets remain'
+        } selected. Try again.`,
+      })
+    }
+  }
+
+  const bulkPending = bulkUpdate.status === 'pending'
+
   return (
     <>
       <section className="panel controls-panel" aria-labelledby="controls-title">
@@ -428,7 +496,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
         </div>
       ) : null}
 
-      {visibleSnapshot && visibleSnapshot.totalCount > 0 ? (
+      {visibleSnapshot ? (
         <>
           <div className="selection-summary">
             <p id="selection-scope">
@@ -448,22 +516,73 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
               <button
                 className="clear-button"
                 type="button"
+                disabled={bulkPending}
                 onClick={clearSelection}
               >
                 Clear selection
               </button>
             ) : null}
           </div>
-          <TicketTable
-            tickets={tickets}
-            totalCount={visibleSnapshot.totalCount}
-            sortBy={sortBy}
-            sortDirection={sortDirection}
-            onSort={sortTickets}
-            selectedIds={selectedIds}
-            onSelectionChange={setTicketSelected}
-            onToggleVisible={toggleVisibleTickets}
-          />
+          <div className="bulk-actions" aria-labelledby="bulk-actions-title">
+            <div>
+              <h3 id="bulk-actions-title">Bulk status update</h3>
+              <p>Selection clears after a successful bulk update.</p>
+            </div>
+            <div className="bulk-action-controls">
+              <label htmlFor="bulk-status">New status for selected tickets</label>
+              <select
+                id="bulk-status"
+                value={bulkStatus}
+                disabled={bulkPending}
+                onChange={(event) =>
+                  setBulkStatus(event.currentTarget.value as TicketStatus)
+                }
+              >
+                {ticketStatuses.map((status) => (
+                  <option key={status} value={status}>
+                    {getStatusLabel(status)}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="primary-button"
+                type="button"
+                disabled={!selectedIds.size || bulkPending}
+                onClick={() => void applyBulkStatus()}
+              >
+                {bulkPending ? 'Applying status…' : 'Apply status'}
+              </button>
+            </div>
+            {bulkUpdate.status === 'pending' ? (
+              <p className="bulk-feedback" role="status">
+                Updating {bulkUpdate.count}{' '}
+                {bulkUpdate.count === 1 ? 'ticket' : 'tickets'}…
+              </p>
+            ) : null}
+            {bulkUpdate.status === 'success' ? (
+              <p className="bulk-feedback success-feedback" role="status">
+                {bulkUpdate.message}
+              </p>
+            ) : null}
+            {bulkUpdate.status === 'error' ? (
+              <p className="bulk-feedback error-feedback" role="alert">
+                {bulkUpdate.message}
+              </p>
+            ) : null}
+          </div>
+          {visibleSnapshot.totalCount > 0 ? (
+            <TicketTable
+              tickets={tickets}
+              totalCount={visibleSnapshot.totalCount}
+              sortBy={sortBy}
+              sortDirection={sortDirection}
+              onSort={sortTickets}
+              selectedIds={selectedIds}
+              onSelectionChange={setTicketSelected}
+              onToggleVisible={toggleVisibleTickets}
+              selectionDisabled={bulkPending}
+            />
+          ) : null}
         </>
       ) : null}
 

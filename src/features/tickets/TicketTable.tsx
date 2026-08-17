@@ -19,6 +19,7 @@ interface TicketTableProps {
   selectedIds: ReadonlySet<TicketId>
   onSelectionChange: (id: TicketId, checked: boolean) => void
   onToggleVisible: (checked: boolean) => void
+  selectionDisabled: boolean
 }
 
 const dateFormatter = new Intl.DateTimeFormat('en', {
@@ -69,6 +70,7 @@ export function TicketTable({
   selectedIds,
   onSelectionChange,
   onToggleVisible,
+  selectionDisabled,
 }: TicketTableProps) {
   const selectVisibleRef = useRef<HTMLInputElement>(null)
   const visibleSelectedCount = tickets.filter((ticket) =>
@@ -98,6 +100,7 @@ export function TicketTable({
                 ref={selectVisibleRef}
                 type="checkbox"
                 checked={allVisibleSelected}
+                disabled={selectionDisabled}
                 aria-label="Select all visible tickets"
                 aria-describedby="selection-scope"
                 onChange={(event) => onToggleVisible(event.currentTarget.checked)}
@@ -142,6 +145,7 @@ export function TicketTable({
                 <input
                   type="checkbox"
                   checked={selectedIds.has(ticket.id)}
+                  disabled={selectionDisabled}
                   aria-label={`Select ${ticket.id}: ${ticket.title}`}
                   onChange={(event) =>
                     onSelectionChange(ticket.id, event.currentTarget.checked)

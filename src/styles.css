@@ -580,6 +580,106 @@ textarea {
   flex: none;
 }
 
+.bulk-actions {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.75fr) minmax(16rem, 1.25fr);
+  gap: 0.75rem 1rem;
+  align-items: end;
+  margin-top: 0.75rem;
+  padding: 0.9rem;
+  border: 1px solid #dfe4ee;
+  border-radius: 0.65rem;
+  background: #ffffff;
+}
+
+.bulk-actions h3,
+.bulk-actions p {
+  margin: 0;
+}
+
+.bulk-actions h3 {
+  color: #2f3951;
+  font-size: 0.86rem;
+}
+
+.bulk-actions > div > p {
+  margin-top: 0.25rem;
+  color: #727d91;
+  font-size: 0.7rem;
+}
+
+.bulk-action-controls {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) auto;
+  gap: 0.35rem 0.55rem;
+}
+
+.bulk-action-controls label {
+  grid-column: 1 / -1;
+  color: #4d5870;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.bulk-action-controls select,
+.primary-button {
+  min-height: 2.4rem;
+  border-radius: 0.5rem;
+}
+
+.bulk-action-controls select {
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #bdc5d4;
+  color: #2f3951;
+  background: #ffffff;
+}
+
+.primary-button {
+  padding: 0.5rem 0.8rem;
+  border: 1px solid #4654d6;
+  color: #ffffff;
+  background: #4654d6;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: #3745bd;
+}
+
+.primary-button:focus-visible,
+.bulk-action-controls select:focus-visible {
+  outline: 3px solid #7c8cff;
+  outline-offset: 2px;
+}
+
+.primary-button:disabled,
+.bulk-action-controls select:disabled {
+  border-color: #cbd0db;
+  color: #8b94a6;
+  background: #e8eaf0;
+  cursor: not-allowed;
+}
+
+.bulk-feedback {
+  grid-column: 1 / -1;
+  padding-top: 0.65rem;
+  border-top: 1px solid #e8eaf0;
+  color: #59657a;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.success-feedback {
+  color: #196548;
+}
+
+.error-feedback {
+  color: #a12634;
+}
+
 .ticket-id,
 .ticket-title {
   display: block;
@@ -686,6 +786,10 @@ textarea {
   .pagination {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .bulk-actions {
+    grid-template-columns: 1fr;
   }
 
   .pagination-actions button {
