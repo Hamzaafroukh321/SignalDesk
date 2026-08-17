@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   getPriorityLabel,
   getStatusLabel,
@@ -500,14 +500,14 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     )
   }
 
-  const setTicketSelected = (id: TicketId, checked: boolean) => {
+  const setTicketSelected = useCallback((id: TicketId, checked: boolean) => {
     setSelectedIds((current) => {
       const next = new Set(current)
       if (checked) next.add(id)
       else next.delete(id)
       return next
     })
-  }
+  }, [])
 
   const clearSelection = () => setSelectedIds(new Set())
   const visibleSelectedCount = tickets.filter((ticket) =>
@@ -591,28 +591,34 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
 
   const bulkPending = bulkUpdate.status === 'pending'
 
-  const setDetailTarget = (id: TicketId | null) => {
+  const setDetailTarget = useCallback((id: TicketId | null) => {
     activeTicketIdRef.current = id
     latestDetailRequestRef.current += 1
-  }
+  }, [])
 
-  const performOpenTicket = (id: TicketId, trigger: HTMLButtonElement) => {
-    setDetailTarget(id)
-    dialogTriggerRef.current = { id, element: trigger }
-    setEditDirty(false)
-    setPendingDialogIntent(null)
-    setActiveTicketId(id)
-    setDetail({ status: 'loading', ticketId: id })
-  }
+  const performOpenTicket = useCallback(
+    (id: TicketId, trigger: HTMLButtonElement) => {
+      setDetailTarget(id)
+      dialogTriggerRef.current = { id, element: trigger }
+      setEditDirty(false)
+      setPendingDialogIntent(null)
+      setActiveTicketId(id)
+      setDetail({ status: 'loading', ticketId: id })
+    },
+    [setDetailTarget],
+  )
 
-  const openTicket = (id: TicketId, trigger: HTMLButtonElement) => {
-    if (activeTicketIdRef.current === id) return
-    if (activeTicketIdRef.current && editDirty) {
-      setPendingDialogIntent({ kind: 'switch', id, trigger })
-      return
-    }
-    performOpenTicket(id, trigger)
-  }
+  const openTicket = useCallback(
+    (id: TicketId, trigger: HTMLButtonElement) => {
+      if (activeTicketIdRef.current === id) return
+      if (activeTicketIdRef.current && editDirty) {
+        setPendingDialogIntent({ kind: 'switch', id, trigger })
+        return
+      }
+      performOpenTicket(id, trigger)
+    },
+    [editDirty, performOpenTicket],
+  )
 
   const performCloseTicket = () => {
     setDetailTarget(null)

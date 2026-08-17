@@ -1,14 +1,10 @@
 import { useEffect, useRef } from 'react'
-import {
-  getPriorityLabel,
-  getStatusLabel,
-  type Ticket,
-  type TicketId,
-} from '../../domain/ticket'
+import type { Ticket, TicketId } from '../../domain/ticket'
 import type {
   SortDirection,
   TicketSortField,
 } from '../../data/ticketRepository'
+import { TicketRow } from './TicketRow'
 
 interface TicketTableProps {
   tickets: readonly Ticket[]
@@ -22,13 +18,6 @@ interface TicketTableProps {
   selectionDisabled: boolean
   onOpenTicket: (id: TicketId, trigger: HTMLButtonElement) => void
 }
-
-const dateFormatter = new Intl.DateTimeFormat('en', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'UTC',
-})
 
 interface SortableHeaderProps {
   field: TicketSortField
@@ -150,69 +139,14 @@ export function TicketTable({
         </thead>
         <tbody>
           {tickets.map((ticket) => (
-            <tr key={ticket.id}>
-              <td className="selection-column">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(ticket.id)}
-                  disabled={selectionDisabled}
-                  aria-label={`Select ${ticket.id}: ${ticket.title}`}
-                  onChange={(event) =>
-                    onSelectionChange(ticket.id, event.currentTarget.checked)
-                  }
-                />
-              </td>
-              <th scope="row" className="ticket-summary-cell">
-                <span className="ticket-id">{ticket.id}</span>
-                <button
-                  type="button"
-                  className="ticket-title-button"
-                  data-ticket-detail-trigger={ticket.id}
-                  aria-label={`Open ${ticket.id} details: ${ticket.title}`}
-                  onClick={(event) =>
-                    onOpenTicket(ticket.id, event.currentTarget)
-                  }
-                >
-                  {ticket.title}
-                </button>
-              </th>
-              <td className="ticket-data-cell customer-cell">
-                <span className="mobile-cell-label" aria-hidden="true">
-                  Customer
-                </span>
-                <span>{ticket.customer.name}</span>
-              </td>
-              <td className="ticket-data-cell status-cell">
-                <span className="mobile-cell-label" aria-hidden="true">
-                  Status
-                </span>
-                <span className={`badge status-${ticket.status}`}>
-                  {getStatusLabel(ticket.status)}
-                </span>
-              </td>
-              <td className="ticket-data-cell priority-cell">
-                <span className="mobile-cell-label" aria-hidden="true">
-                  Priority
-                </span>
-                <span className={`badge priority-${ticket.priority}`}>
-                  {getPriorityLabel(ticket.priority)}
-                </span>
-              </td>
-              <td className="ticket-data-cell assignee-cell">
-                <span className="mobile-cell-label" aria-hidden="true">
-                  Assignee
-                </span>
-                <span>{ticket.assignee?.name ?? 'Unassigned'}</span>
-              </td>
-              <td className="ticket-data-cell updated-cell">
-                <span className="mobile-cell-label" aria-hidden="true">
-                  Updated
-                </span>
-                <time dateTime={ticket.updatedAt}>
-                  {dateFormatter.format(new Date(ticket.updatedAt))}
-                </time>
-              </td>
-            </tr>
+            <TicketRow
+              key={ticket.id}
+              ticket={ticket}
+              selected={selectedIds.has(ticket.id)}
+              selectionDisabled={selectionDisabled}
+              onSelectionChange={onSelectionChange}
+              onOpenTicket={onOpenTicket}
+            />
           ))}
         </tbody>
       </table>
