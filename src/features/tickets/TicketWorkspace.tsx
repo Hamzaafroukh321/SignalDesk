@@ -27,6 +27,7 @@ import {
   TicketDetailsDialog,
   type TicketDetailResource,
 } from './TicketDetailsDialog'
+import { useAnnouncements } from '../../components/announcementContext'
 
 interface TicketWorkspaceProps {
   repository: TicketRepository
@@ -74,6 +75,7 @@ function applyTicketChanges(ticket: Ticket, changes: TicketChanges): Ticket {
 }
 
 export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
+  const { announce } = useAnnouncements()
   const [list, setList] = useState<ListResource>({
     status: 'loading',
     previous: null,
@@ -92,6 +94,9 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     parseTicketListState(window.location.search),
   )
   const listStateRef = useRef(listState)
+  const listAnnouncementIntentRef = useRef<
+    'initial' | 'navigation' | 'retry' | null
+  >('initial')
   const {
     search,
     statuses,
@@ -133,6 +138,15 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       )
       .then((page) => {
         if (requestId !== latestRequestRef.current) return
+        const announcementIntent = listAnnouncementIntentRef.current
+        listAnnouncementIntentRef.current = null
+        if (announcementIntent) {
+          announce(
+            page.totalCount === 0
+              ? 'Ticket queue ready. No tickets match this view.'
+              : `Ticket queue ready. ${page.totalCount} total; page ${page.page} of ${page.totalPages}.`,
+          )
+        }
         setList((current) => {
           const entities = new Map(getSnapshot(current)?.entities ?? [])
           page.tickets.forEach((ticket) => entities.set(ticket.id, ticket))
@@ -163,6 +177,10 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
           requestId === latestRequestRef.current &&
           !isAbortError(error)
         ) {
+          listAnnouncementIntentRef.current = null
+          announce('Ticket queue failed to load. Retry is available.', {
+            priority: 'assertive',
+          })
           setList((current) => ({
             status: 'error',
             previous: getSnapshot(current),
@@ -186,6 +204,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     sortBy,
     sortDirection,
     statuses,
+    announce,
   ])
 
   useEffect(() => {
@@ -202,6 +221,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   useEffect(() => {
     const handlePopState = () => {
       const restoredState = parseTicketListState(window.location.search)
+      listAnnouncementIntentRef.current = 'navigation'
       listStateRef.current = restoredState
       writeTicketListUrl(restoredState, 'replace')
       setList((current) => ({
@@ -300,6 +320,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
 
   const retry = () => {
     focusResultsAfterRetryRef.current = true
+    listAnnouncementIntentRef.current = 'retry'
     markResultsUpdating()
     setRequestVersion((version) => version + 1)
   }
@@ -307,7 +328,9 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   const applyListState = (
     nextState: TicketListState,
     historyMode: 'push' | 'replace',
+    announceResults = true,
   ) => {
+    listAnnouncementIntentRef.current = announceResults ? 'navigation' : null
     markResultsUpdating()
     listStateRef.current = nextState
     setListState(nextState)
@@ -318,6 +341,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     applyListState(
       { ...listStateRef.current, search: value, page: 1 },
       'replace',
+      false,
     )
   }
 
@@ -416,11 +440,13 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
 
     const selectedTickets = [...selectedIds].map((id) => snapshot.entities.get(id))
     if (selectedTickets.some((ticket) => !ticket)) {
+      const message =
+        'The selected tickets are no longer available. Refresh the queue and try again.'
       setBulkUpdate({
         status: 'error',
-        message:
-          'The selected tickets are no longer available. Refresh the queue and try again.',
+        message,
       })
+      announce(message, { priority: 'assertive' })
       return
     }
 
@@ -449,20 +475,25 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
         }
       })
       setSelectedIds(new Set())
+      const message = `Applied ${getStatusLabel(bulkStatus)} to ${count} ${
+        count === 1 ? 'ticket' : 'tickets'
+      }. Selection cleared.`
       setBulkUpdate({
         status: 'success',
-        message: `Applied ${getStatusLabel(bulkStatus)} to ${count} ${
-          count === 1 ? 'ticket' : 'tickets'
-        }. Selection cleared.`,
+        message,
       })
+      announce(message)
+      listAnnouncementIntentRef.current = null
       setRequestVersion((version) => version + 1)
     } catch {
+      const message = `Bulk update failed. Your ${count} selected ${
+        count === 1 ? 'ticket remains' : 'tickets remain'
+      } selected. Try again.`
       setBulkUpdate({
         status: 'error',
-        message: `Bulk update failed. Your ${count} selected ${
-          count === 1 ? 'ticket remains' : 'tickets remain'
-        } selected. Try again.`,
+        message,
       })
+      announce(message, { priority: 'assertive' })
     }
   }
 
@@ -528,6 +559,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
           previous: { ...snapshot, entities },
         }
       })
+      listAnnouncementIntentRef.current = null
       setRequestVersion((version) => version + 1)
     }
 
@@ -538,9 +570,20 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
         changes,
       })
       reconcileAuthoritativeTicket(saved)
+      if (latestSaveByTicketRef.current.get(baseline.id) === operationId) {
+        announce(`Saved ${saved.id}: ${saved.title}.`)
+      }
     } catch (error) {
       if (error instanceof TicketVersionConflictError) {
         reconcileAuthoritativeTicket(error.currentTicket)
+      }
+      if (latestSaveByTicketRef.current.get(baseline.id) === operationId) {
+        announce(
+          error instanceof TicketVersionConflictError
+            ? 'Ticket save conflict. A newer version was restored; draft retained for review and retry.'
+            : 'Ticket save failed. Last saved values restored; draft retained for retry.',
+          { priority: 'assertive' },
+        )
       }
       throw error
     } finally {
@@ -743,12 +786,12 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
               </p>
             ) : null}
             {bulkUpdate.status === 'success' ? (
-              <p className="bulk-feedback success-feedback" role="status">
+              <p className="bulk-feedback success-feedback">
                 {bulkUpdate.message}
               </p>
             ) : null}
             {bulkUpdate.status === 'error' ? (
-              <p className="bulk-feedback error-feedback" role="alert">
+              <p className="bulk-feedback error-feedback">
                 {bulkUpdate.message}
               </p>
             ) : null}
@@ -791,7 +834,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       ) : null}
 
       {list.status === 'error' ? (
-        <div className="result-state error-state" role="alert">
+        <div className="result-state error-state">
           <span className="error-mark" aria-hidden="true">
             !
           </span>
@@ -839,7 +882,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       ) : null}
 
       <div className="status-area">
-        <p role="status" aria-live="polite" aria-atomic="true">
+        <p aria-label="Ticket list status">
           {list.status === 'loading'
             ? hasListRefinement
               ? 'Updating the refined ticket results…'

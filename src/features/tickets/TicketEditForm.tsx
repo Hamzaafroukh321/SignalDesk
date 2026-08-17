@@ -354,7 +354,7 @@ export function TicketEditForm({
       </fieldset>
 
       {saveError ? (
-        <div className="edit-save-error" role="alert">
+        <div className="edit-save-error">
           <h3>
             {saveError.kind === 'conflict'
               ? 'Review a newer ticket version'

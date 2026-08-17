@@ -33,9 +33,7 @@ describe('SignalDesk application shell', () => {
     expect(
       screen.getByRole('region', { name: 'Ticket results' }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Loading the ticket queue…',
-    )
+    expect(screen.getByText('Loading the ticket queue…')).toBeVisible()
   })
 
   it('moves keyboard focus to the main workspace through the skip link', async () => {
@@ -71,9 +69,7 @@ describe('SignalDesk application shell', () => {
     expect(tableScope.getAllByRole('row')).toHaveLength(11)
     expect(tableScope.getByText('SD-1048')).toBeVisible()
     expect(tableScope.getByText('Atlas & Pine')).toBeVisible()
-    expect(screen.getByRole('status')).toHaveTextContent(
-      '10 tickets are ready for review.',
-    )
+    expect(screen.getByText('10 tickets are ready for review.')).toBeVisible()
   })
 
   it('keeps the workspace visible while ticket results are loading', () => {
@@ -87,9 +83,7 @@ describe('SignalDesk application shell', () => {
       'true',
     )
     expect(screen.getByRole('heading', { name: 'Gathering the queue' })).toBeVisible()
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Loading the ticket queue…',
-    )
+    expect(screen.getByText('Loading the ticket queue…')).toBeVisible()
   })
 
   it('explains a valid empty queue', async () => {
@@ -106,9 +100,7 @@ describe('SignalDesk application shell', () => {
       await screen.findByRole('heading', { name: 'No tickets in this queue' }),
     ).toBeVisible()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'No tickets match the current queue view.',
-    )
+    expect(screen.getByText('No tickets match the current queue view.')).toBeVisible()
   })
 
   it('offers a retry after failure and moves focus to recovered results', async () => {
@@ -127,14 +119,25 @@ describe('SignalDesk application shell', () => {
       />,
     )
 
-    const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('Ticket results are unavailable')
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Ticket results are unavailable',
+      }),
+    ).toBeVisible()
+    expect(
+      screen.getByTestId('assertive-operation-announcements'),
+    ).toHaveTextContent('Ticket queue failed to load. Retry is available.')
     const retry = screen.getByRole('button', { name: 'Retry loading tickets' })
     await user.click(retry)
 
     expect(await screen.findByRole('table')).toBeVisible()
     expect(screen.getByRole('heading', { name: 'Ticket results' })).toHaveFocus()
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Ticket results are unavailable' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByTestId('polite-operation-announcements')).toHaveTextContent(
+      'Ticket queue ready. 24 total; page 1 of 3.',
+    )
   })
 
   it('searches meaningful ticket text and restores the queue when cleared', async () => {
@@ -535,8 +538,12 @@ describe('SignalDesk application shell', () => {
     expect(
       await screen.findByText(
         'Applied Resolved to 2 tickets. Selection cleared.',
+        { selector: '.bulk-feedback' },
       ),
     ).toBeVisible()
+    expect(screen.getByTestId('polite-operation-announcements')).toHaveTextContent(
+      'Applied Resolved to 2 tickets. Selection cleared.',
+    )
     expect(screen.getByText('0 tickets selected')).toBeVisible()
     expect(apply).toBeDisabled()
 
@@ -586,10 +593,14 @@ describe('SignalDesk application shell', () => {
     expect(rowSelection).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Clear selection' })).toBeDisabled()
 
-    const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent(
-      'Bulk update failed. Your 1 selected ticket remains selected. Try again.',
-    )
+    const failureMessage =
+      'Bulk update failed. Your 1 selected ticket remains selected. Try again.'
+    expect(
+      await screen.findByText(failureMessage, { selector: '.bulk-feedback' }),
+    ).toBeVisible()
+    expect(
+      screen.getByTestId('assertive-operation-announcements'),
+    ).toHaveTextContent(failureMessage)
     expect(screen.getByText('1 ticket selected')).toBeVisible()
     expect(rowSelection).toBeChecked()
     expect(rowSelection).toBeEnabled()
@@ -659,7 +670,8 @@ describe('SignalDesk application shell', () => {
       }),
     )
 
-    const alert = await screen.findByRole('alert')
+    const loadingDialog = await screen.findByRole('dialog')
+    const alert = await within(loadingDialog).findByRole('alert')
     expect(alert).toHaveTextContent('Ticket details are unavailable')
     await user.click(
       within(screen.getByRole('dialog')).getByRole('button', {
@@ -849,6 +861,9 @@ describe('SignalDesk application shell', () => {
     expect(dialogScope.getByText('Amina Rahal')).toBeVisible()
     expect(dialogScope.getByText('Bug')).toBeVisible()
     expect(dialogScope.getByRole('button', { name: 'Edit ticket' })).toHaveFocus()
+    expect(screen.getByTestId('polite-operation-announcements')).toHaveTextContent(
+      'Saved SD-1048: Corrected annual invoice charge.',
+    )
     expect(
       await screen.findByRole('button', {
         name: 'Open SD-1048 details: Corrected annual invoice charge',
@@ -1018,9 +1033,17 @@ describe('SignalDesk application shell', () => {
     await user.type(title, 'Retained invoice recovery draft')
     await user.click(dialogScope.getByRole('button', { name: 'Save ticket' }))
 
-    const saveError = await dialogScope.findByRole('alert')
-    expect(saveError).toHaveTextContent('Ticket save failed')
-    expect(saveError).toHaveTextContent('Your draft is still here')
+    const saveErrorHeading = await dialogScope.findByRole('heading', {
+      name: 'Ticket save failed',
+    })
+    expect(saveErrorHeading.parentElement).toHaveTextContent(
+      'Your draft is still here',
+    )
+    expect(
+      screen.getByTestId('assertive-operation-announcements'),
+    ).toHaveTextContent(
+      'Ticket save failed. Last saved values restored; draft retained for retry.',
+    )
     expect(title).toHaveValue('Retained invoice recovery draft')
     expect(
       screen.getByRole('button', {
@@ -1066,10 +1089,20 @@ describe('SignalDesk application shell', () => {
     })
     await user.click(dialogScope.getByRole('button', { name: 'Save ticket' }))
 
-    const conflict = await dialogScope.findByRole('alert')
-    expect(conflict).toHaveTextContent('Review a newer ticket version')
-    expect(conflict).toHaveTextContent(`now version ${teammateTicket.version}`)
-    expect(conflict).toHaveTextContent('Teammate invoice correction')
+    const conflictHeading = await dialogScope.findByRole('heading', {
+      name: 'Review a newer ticket version',
+    })
+    expect(conflictHeading.parentElement).toHaveTextContent(
+      `now version ${teammateTicket.version}`,
+    )
+    expect(conflictHeading.parentElement).toHaveTextContent(
+      'Teammate invoice correction',
+    )
+    expect(
+      screen.getByTestId('assertive-operation-announcements'),
+    ).toHaveTextContent(
+      'Ticket save conflict. A newer version was restored; draft retained for review and retry.',
+    )
     expect(title).toHaveValue('Agent invoice resolution draft')
     expect(
       screen.getByRole('button', {
@@ -1167,6 +1200,9 @@ describe('SignalDesk application shell', () => {
     expect(
       dialogScope.getByRole('button', { name: 'Saving ticket…' }),
     ).toBeDisabled()
+    expect(
+      screen.getByTestId('assertive-operation-announcements'),
+    ).toBeEmptyDOMElement()
 
     await act(async () => {
       releaseSecond?.()
