@@ -56,6 +56,17 @@ function getSnapshot(list: ListResource): TicketListSnapshot | null {
   return list.previous
 }
 
+function applyTicketChanges(ticket: Ticket, changes: TicketChanges): Ticket {
+  return {
+    ...ticket,
+    ...changes,
+    assignee: Object.hasOwn(changes, 'assignee')
+      ? (changes.assignee ?? null)
+      : ticket.assignee,
+    tags: changes.tags ?? ticket.tags,
+  }
+}
+
 export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   const [list, setList] = useState<ListResource>({
     status: 'loading',
@@ -67,6 +78,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   const [bulkUpdate, setBulkUpdate] = useState<BulkUpdateState>({ status: 'idle' })
   const [activeTicketId, setActiveTicketId] = useState<TicketId | null>(null)
   const [detail, setDetail] = useState<TicketDetailResource | null>(null)
+  const [optimisticTicket, setOptimisticTicket] = useState<Ticket | null>(null)
   const [detailRequestVersion, setDetailRequestVersion] = useState(0)
   const [listState, setListState] = useState(() =>
     parseTicketListState(window.location.search),
@@ -253,13 +265,18 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
 
   const visibleSnapshot = getSnapshot(list)
 
-  const tickets =
-    visibleSnapshot
-      ? visibleSnapshot.ids.flatMap((id) => {
-          const ticket = visibleSnapshot.entities.get(id)
-          return ticket ? [ticket] : []
-        })
-      : []
+  const tickets = visibleSnapshot
+    ? visibleSnapshot.ids.flatMap((id) => {
+        const ticket = visibleSnapshot.entities.get(id)
+        if (!ticket) return []
+        return [optimisticTicket?.id === id ? optimisticTicket : ticket]
+      })
+    : []
+
+  const visibleDetail: TicketDetailResource | null =
+    detail?.status === 'success' && optimisticTicket?.id === detail.ticket.id
+      ? { status: 'success', ticket: optimisticTicket }
+      : detail
 
   const markResultsUpdating = () => {
     setList((current) => ({
@@ -458,23 +475,36 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
 
   const saveActiveTicket = async (changes: TicketChanges) => {
     if (detail?.status !== 'success') return
-    const saved = await repository.updateTicket({
-      id: detail.ticket.id,
-      expectedVersion: detail.ticket.version,
-      changes,
-    })
-    setDetail({ status: 'success', ticket: saved })
-    setList((current) => {
-      const snapshot = getSnapshot(current)
-      if (!snapshot) return current
-      const entities = new Map(snapshot.entities)
-      entities.set(saved.id, saved)
-      return {
-        status: 'loading',
-        previous: { ...snapshot, entities },
-      }
-    })
-    setRequestVersion((version) => version + 1)
+    const baseline = detail.ticket
+    setOptimisticTicket(applyTicketChanges(baseline, changes))
+
+    try {
+      const saved = await repository.updateTicket({
+        id: baseline.id,
+        expectedVersion: baseline.version,
+        changes,
+      })
+      setDetail((current) =>
+        current?.status === 'success' && current.ticket.id === saved.id
+          ? { status: 'success', ticket: saved }
+          : current,
+      )
+      setList((current) => {
+        const snapshot = getSnapshot(current)
+        if (!snapshot) return current
+        const entities = new Map(snapshot.entities)
+        entities.set(saved.id, saved)
+        return {
+          status: 'loading',
+          previous: { ...snapshot, entities },
+        }
+      })
+      setRequestVersion((version) => version + 1)
+    } finally {
+      setOptimisticTicket((current) =>
+        current?.id === baseline.id ? null : current,
+      )
+    }
   }
 
   return (
@@ -778,9 +808,9 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
         </p>
       </div>
       </section>
-      {detail ? (
+      {visibleDetail ? (
         <TicketDetailsDialog
-          detail={detail}
+          detail={visibleDetail}
           onClose={closeTicket}
           onRetry={retryTicket}
           onSave={saveActiveTicket}

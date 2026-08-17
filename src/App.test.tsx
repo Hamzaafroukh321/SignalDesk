@@ -1,6 +1,13 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
 import { createTicketRepository } from './data/ticketRepository'
 
@@ -914,6 +921,74 @@ describe('SignalDesk application shell', () => {
     await user.click(dialogScope.getByRole('button', { name: 'Save ticket' }))
     expect(
       await screen.findByRole('dialog', { name: 'Corrected invoice title' }),
+    ).toBeVisible()
+  })
+
+  it('keeps the list and dialog optimistically aligned during one guarded save', async () => {
+    const user = userEvent.setup()
+    const repository = createTicketRepository({ defaultLatencyMs: 0 })
+    const updateTicket = repository.updateTicket.bind(repository)
+    let releaseUpdate: (() => void) | undefined
+    const updateGate = new Promise<void>((resolve) => {
+      releaseUpdate = resolve
+    })
+    const updateSpy = vi
+      .spyOn(repository, 'updateTicket')
+      .mockImplementation(async (command, options) => {
+        await updateGate
+        return updateTicket(command, options)
+      })
+
+    render(<App repository={repository} />)
+    await screen.findByRole('table')
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+      }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    const dialogScope = within(dialog)
+    await user.click(dialogScope.getByRole('button', { name: 'Edit ticket' }))
+    const title = dialogScope.getByRole('textbox', { name: 'Title' })
+    await user.clear(title)
+    await user.type(title, 'Optimistic invoice correction')
+    await user.selectOptions(
+      dialogScope.getByRole('combobox', { name: 'Status' }),
+      'open',
+    )
+    const saveButton = dialogScope.getByRole('button', { name: 'Save ticket' })
+    const editForm = saveButton.closest('form')
+    if (!editForm) throw new Error('Expected the ticket edit form.')
+
+    await user.click(saveButton)
+
+    const optimisticTrigger = await screen.findByRole('button', {
+      name: 'Open SD-1048 details: Optimistic invoice correction',
+    })
+    const optimisticRow = optimisticTrigger.closest('tr')
+    if (!optimisticRow) throw new Error('Expected an optimistic ticket row.')
+    expect(within(optimisticRow).getByText('Open')).toBeVisible()
+    expect(
+      screen.getByRole('dialog', { name: 'Optimistic invoice correction' }),
+    ).toBeVisible()
+    expect(
+      dialogScope.getByRole('button', { name: 'Saving ticket…' }),
+    ).toBeDisabled()
+
+    fireEvent.submit(editForm)
+    expect(updateSpy).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      releaseUpdate?.()
+    })
+    expect(
+      await dialogScope.findByRole('button', { name: 'Edit ticket' }),
+    ).toBeVisible()
+    expect(updateSpy).toHaveBeenCalledTimes(1)
+    expect(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Optimistic invoice correction',
+      }),
     ).toBeVisible()
   })
 })

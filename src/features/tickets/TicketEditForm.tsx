@@ -91,6 +91,7 @@ export function TicketEditForm({
   const [summaryFocusRequest, setSummaryFocusRequest] = useState(0)
   const titleRef = useRef<HTMLInputElement>(null)
   const errorSummaryRef = useRef<HTMLDivElement>(null)
+  const savingRef = useRef(false)
 
   useEffect(() => {
     titleRef.current?.focus()
@@ -126,6 +127,8 @@ export function TicketEditForm({
   }
 
   const submit = async () => {
+    if (savingRef.current) return
+
     const errors = validateDraft(draft)
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors)
@@ -133,6 +136,7 @@ export function TicketEditForm({
       return
     }
 
+    savingRef.current = true
     setSaving(true)
     setSaveError('')
     setValidationErrors({})
@@ -149,6 +153,7 @@ export function TicketEditForm({
       })
     } catch {
       setSaveError('The ticket could not be saved. Your edits are still here.')
+      savingRef.current = false
       setSaving(false)
     }
   }
