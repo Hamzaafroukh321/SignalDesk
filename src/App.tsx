@@ -47,14 +47,6 @@ export function App({ repository }: AppProps) {
         </section>
 
         <div className="workspace-grid">
-          <section className="panel controls-panel" aria-labelledby="controls-title">
-            <div>
-              <p className="panel-kicker">Refine the queue</p>
-              <h2 id="controls-title">Ticket controls</h2>
-            </div>
-            <p>Search and filtering controls will appear here.</p>
-          </section>
-
           <TicketWorkspace repository={ticketRepository} />
         </div>
       </main>

@@ -198,6 +198,65 @@ textarea {
   background: #f9faff;
 }
 
+.search-control {
+  margin-top: 2rem;
+}
+
+.search-control label {
+  display: block;
+  color: #2c3650;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.search-control > p {
+  margin: 0.35rem 0 0;
+  color: #6b7588;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.search-input-row {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.8rem;
+}
+
+.search-input-row input {
+  width: 100%;
+  min-height: 2.65rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #bdc5d4;
+  border-radius: 0.6rem;
+  color: #202942;
+  background: #ffffff;
+}
+
+.search-input-row input:focus-visible {
+  border-color: #6878df;
+  outline: 3px solid rgb(104 120 223 / 24%);
+  outline-offset: 1px;
+}
+
+.clear-button {
+  justify-self: start;
+  padding: 0.35rem 0;
+  border: 0;
+  color: #4050bd;
+  background: transparent;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 0.18rem;
+  cursor: pointer;
+}
+
+.clear-button:focus-visible {
+  border-radius: 0.15rem;
+  outline: 3px solid #7c8cff;
+  outline-offset: 2px;
+}
+
 .result-state h3,
 .result-state p {
   margin: 0;

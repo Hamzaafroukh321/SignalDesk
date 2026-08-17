@@ -125,4 +125,70 @@ describe('SignalDesk application shell', () => {
     expect(screen.getByRole('heading', { name: 'Ticket results' })).toHaveFocus()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
+
+  it('searches meaningful ticket text and restores the queue when cleared', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    await screen.findByRole('table')
+
+    const search = screen.getByRole('searchbox', { name: 'Search tickets' })
+    expect(search).toHaveAccessibleDescription(
+      'Find a title, customer, ticket ID, or tag.',
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Clear search' }),
+    ).not.toBeInTheDocument()
+
+    await user.type(search, 'Atlas & Pine')
+    expect(search).toHaveValue('Atlas & Pine')
+    expect(
+      await screen.findByRole('table', {
+        name: /showing 1 of 1/,
+      }),
+    ).toBeVisible()
+    expect(screen.getByText('Invoice shows duplicate annual charge')).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(search).toHaveValue('')
+    expect(
+      await screen.findByRole('table', {
+        name: /showing 10 of 24/,
+      }),
+    ).toBeVisible()
+  })
+
+  it('keeps the newest search intent when an older response finishes later', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        repository={createTicketRepository({
+          defaultLatencyMs: 0,
+          plans: {
+            listTickets: [
+              { latencyMs: 0 },
+              { latencyMs: 120 },
+              { latencyMs: 5 },
+            ],
+          },
+        })}
+      />,
+    )
+    await screen.findByRole('table')
+    const search = screen.getByRole('searchbox', { name: 'Search tickets' })
+
+    await user.type(search, 'z')
+    await user.clear(search)
+
+    expect(
+      await screen.findByRole('table', { name: /showing 10 of 24/ }),
+    ).toBeVisible()
+    await new Promise((resolve) => setTimeout(resolve, 140))
+    expect(search).toHaveValue('')
+    expect(screen.queryByText('No tickets match your search')).not.toBeInTheDocument()
+    expect(screen.getByRole('table')).toHaveAccessibleName(
+      /showing 10 of 24/,
+    )
+  })
 })

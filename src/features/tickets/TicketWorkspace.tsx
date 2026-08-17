@@ -32,15 +32,20 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     previous: null,
   })
   const [requestVersion, setRequestVersion] = useState(0)
+  const [search, setSearch] = useState('')
   const resultsHeadingRef = useRef<HTMLHeadingElement>(null)
   const focusResultsAfterRetryRef = useRef(false)
+  const latestRequestRef = useRef(0)
 
   useEffect(() => {
     const controller = new AbortController()
+    const requestId = latestRequestRef.current + 1
+    latestRequestRef.current = requestId
 
     void repository
-      .listTickets({}, { signal: controller.signal })
+      .listTickets({ search }, { signal: controller.signal })
       .then((page) => {
+        if (requestId !== latestRequestRef.current) return
         setList({
           status: 'success',
           snapshot: {
@@ -53,7 +58,10 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
         })
       })
       .catch((error: unknown) => {
-        if (!isAbortError(error)) {
+        if (
+          requestId === latestRequestRef.current &&
+          !isAbortError(error)
+        ) {
           setList((current) => ({
             status: 'error',
             previous: getSnapshot(current),
@@ -62,9 +70,12 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       })
 
     return () => {
+      if (latestRequestRef.current === requestId) {
+        latestRequestRef.current += 1
+      }
       controller.abort()
     }
-  }, [repository, requestVersion])
+  }, [repository, requestVersion, search])
 
   useEffect(() => {
     if (list.status === 'success' && focusResultsAfterRetryRef.current) {
@@ -92,12 +103,53 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     setRequestVersion((version) => version + 1)
   }
 
+  const beginSearch = (value: string) => {
+    setList((current) => ({
+      status: 'loading',
+      previous: getSnapshot(current),
+    }))
+    setSearch(value)
+  }
+
   return (
-    <section
-      className="panel results-panel"
-      aria-labelledby="results-title"
-      aria-busy={list.status === 'loading'}
-    >
+    <>
+      <section className="panel controls-panel" aria-labelledby="controls-title">
+        <div>
+          <p className="panel-kicker">Refine the queue</p>
+          <h2 id="controls-title">Ticket controls</h2>
+        </div>
+
+        <div className="search-control">
+          <label htmlFor="ticket-search">Search tickets</label>
+          <p id="ticket-search-hint">
+            Find a title, customer, ticket ID, or tag.
+          </p>
+          <div className="search-input-row">
+            <input
+              id="ticket-search"
+              type="search"
+              value={search}
+              aria-describedby="ticket-search-hint"
+              onChange={(event) => beginSearch(event.currentTarget.value)}
+            />
+            {search ? (
+              <button
+                className="clear-button"
+                type="button"
+                onClick={() => beginSearch('')}
+              >
+                Clear search
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      <section
+        className="panel results-panel"
+        aria-labelledby="results-title"
+        aria-busy={list.status === 'loading'}
+      >
       <div className="panel-heading">
         <div>
           <p className="panel-kicker">Shared focus</p>
@@ -133,8 +185,12 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
             0
           </span>
           <div>
-            <h3>No tickets in this queue</h3>
-            <p>The current ticket view is valid, but it has no matching work.</p>
+            <h3>{search ? 'No tickets match your search' : 'No tickets in this queue'}</h3>
+            <p>
+              {search
+                ? `Try another phrase or clear “${search}” to return to the full queue.`
+                : 'The current ticket view is valid, but it has no matching work.'}
+            </p>
           </div>
         </div>
       ) : null}
@@ -156,7 +212,11 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
 
       <div className="status-area">
         <p role="status" aria-live="polite" aria-atomic="true">
-          {list.status === 'loading' ? 'Loading the ticket queue…' : null}
+          {list.status === 'loading'
+            ? search
+              ? `Updating results for “${search}”…`
+              : 'Loading the ticket queue…'
+            : null}
           {list.status === 'success' && list.snapshot.totalCount > 0
             ? `${tickets.length} tickets are ready for review.`
             : null}
@@ -168,6 +228,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
             : null}
         </p>
       </div>
-    </section>
+      </section>
+    </>
   )
 }
