@@ -289,6 +289,21 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   }
 
   const clearSelection = () => setSelectedIds(new Set())
+  const visibleSelectedCount = tickets.filter((ticket) =>
+    selectedIds.has(ticket.id),
+  ).length
+  const hiddenSelectedCount = selectedIds.size - visibleSelectedCount
+
+  const toggleVisibleTickets = (checked: boolean) => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      tickets.forEach((ticket) => {
+        if (checked) next.add(ticket.id)
+        else next.delete(ticket.id)
+      })
+      return next
+    })
+  }
 
   return (
     <>
@@ -416,9 +431,18 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       {visibleSnapshot && visibleSnapshot.totalCount > 0 ? (
         <>
           <div className="selection-summary">
-            <p>
-              {selectedIds.size}{' '}
-              {selectedIds.size === 1 ? 'ticket' : 'tickets'} selected
+            <p id="selection-scope">
+              <span>
+                {selectedIds.size}{' '}
+                {selectedIds.size === 1 ? 'ticket' : 'tickets'} selected
+              </span>
+              <span className="selection-scope-detail">
+                {' '}
+                · {visibleSelectedCount} on this page
+                {hiddenSelectedCount
+                  ? `, ${hiddenSelectedCount} outside this view`
+                  : ''}
+              </span>
             </p>
             {selectedIds.size ? (
               <button
@@ -438,6 +462,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
             onSort={sortTickets}
             selectedIds={selectedIds}
             onSelectionChange={setTicketSelected}
+            onToggleVisible={toggleVisibleTickets}
           />
         </>
       ) : null}

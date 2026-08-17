@@ -571,6 +571,11 @@ textarea {
   font-weight: 800;
 }
 
+.selection-scope-detail {
+  color: #748096;
+  font-weight: 650;
+}
+
 .selection-summary .clear-button {
   flex: none;
 }

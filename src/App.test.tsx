@@ -442,4 +442,59 @@ describe('SignalDesk application shell', () => {
       screen.queryByRole('button', { name: 'Clear selection' }),
     ).not.toBeInTheDocument()
   })
+
+  it('selects only visible tickets with accurate partial and hidden states', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    await screen.findByRole('table')
+
+    let selectVisible = screen.getByRole('checkbox', {
+      name: 'Select all visible tickets',
+    })
+    expect(selectVisible).not.toBeChecked()
+    expect(selectVisible).not.toBePartiallyChecked()
+
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: 'Select SD-1048: Invoice shows duplicate annual charge',
+      }),
+    )
+    expect(selectVisible).toBePartiallyChecked()
+
+    selectVisible.focus()
+    await user.keyboard(' ')
+    expect(selectVisible).toBeChecked()
+    expect(selectVisible).not.toBePartiallyChecked()
+    expect(screen.getByText('10 tickets selected')).toBeVisible()
+    expect(screen.getByText('· 10 on this page')).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Next page' }))
+    expect(await screen.findByText('Page 2 of 3 · 24 results')).toBeVisible()
+    selectVisible = screen.getByRole('checkbox', {
+      name: 'Select all visible tickets',
+    })
+    expect(selectVisible).not.toBeChecked()
+    expect(screen.getByText('10 tickets selected')).toBeVisible()
+    expect(screen.getByText('· 0 on this page, 10 outside this view')).toBeVisible()
+
+    selectVisible.focus()
+    await user.keyboard(' ')
+    expect(selectVisible).toBeChecked()
+    expect(screen.getByText('20 tickets selected')).toBeVisible()
+    expect(screen.getByText('· 10 on this page, 10 outside this view')).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Previous page' }))
+    expect(await screen.findByText('Page 1 of 3 · 24 results')).toBeVisible()
+    selectVisible = screen.getByRole('checkbox', {
+      name: 'Select all visible tickets',
+    })
+    expect(selectVisible).toBeChecked()
+    await user.click(selectVisible)
+
+    expect(selectVisible).not.toBeChecked()
+    expect(screen.getByText('10 tickets selected')).toBeVisible()
+    expect(screen.getByText('· 0 on this page, 10 outside this view')).toBeVisible()
+  })
 })

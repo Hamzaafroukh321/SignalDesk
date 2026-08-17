@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import {
   getPriorityLabel,
   getStatusLabel,
@@ -17,6 +18,7 @@ interface TicketTableProps {
   onSort: (field: TicketSortField) => void
   selectedIds: ReadonlySet<TicketId>
   onSelectionChange: (id: TicketId, checked: boolean) => void
+  onToggleVisible: (checked: boolean) => void
 }
 
 const dateFormatter = new Intl.DateTimeFormat('en', {
@@ -66,7 +68,23 @@ export function TicketTable({
   onSort,
   selectedIds,
   onSelectionChange,
+  onToggleVisible,
 }: TicketTableProps) {
+  const selectVisibleRef = useRef<HTMLInputElement>(null)
+  const visibleSelectedCount = tickets.filter((ticket) =>
+    selectedIds.has(ticket.id),
+  ).length
+  const allVisibleSelected =
+    tickets.length > 0 && visibleSelectedCount === tickets.length
+  const someVisibleSelected =
+    visibleSelectedCount > 0 && !allVisibleSelected
+
+  useEffect(() => {
+    if (selectVisibleRef.current) {
+      selectVisibleRef.current.indeterminate = someVisibleSelected
+    }
+  }, [someVisibleSelected])
+
   return (
     <div className="table-scroll">
       <table className="ticket-table">
@@ -76,7 +94,14 @@ export function TicketTable({
         <thead>
           <tr>
             <th scope="col" className="selection-column">
-              <span className="visually-hidden">Selection</span>
+              <input
+                ref={selectVisibleRef}
+                type="checkbox"
+                checked={allVisibleSelected}
+                aria-label="Select all visible tickets"
+                aria-describedby="selection-scope"
+                onChange={(event) => onToggleVisible(event.currentTarget.checked)}
+              />
             </th>
             <SortableHeader
               field="title"
