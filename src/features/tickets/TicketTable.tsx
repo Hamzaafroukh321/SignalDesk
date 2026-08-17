@@ -20,7 +20,7 @@ interface TicketTableProps {
   onSelectionChange: (id: TicketId, checked: boolean) => void
   onToggleVisible: (checked: boolean) => void
   selectionDisabled: boolean
-  onOpenTicket: (id: TicketId) => void
+  onOpenTicket: (id: TicketId, trigger: HTMLButtonElement) => void
 }
 
 const dateFormatter = new Intl.DateTimeFormat('en', {
@@ -159,8 +159,11 @@ export function TicketTable({
                 <button
                   type="button"
                   className="ticket-title-button"
+                  data-ticket-detail-trigger={ticket.id}
                   aria-label={`Open ${ticket.id} details: ${ticket.title}`}
-                  onClick={() => onOpenTicket(ticket.id)}
+                  onClick={(event) =>
+                    onOpenTicket(ticket.id, event.currentTarget)
+                  }
                 >
                   {ticket.title}
                 </button>

@@ -84,6 +84,11 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   const focusResultsAfterRetryRef = useRef(false)
   const latestRequestRef = useRef(0)
   const latestDetailRequestRef = useRef(0)
+  const dialogTriggerRef = useRef<{
+    id: TicketId
+    element: HTMLButtonElement
+  } | null>(null)
+  const pendingFocusRestoreRef = useRef(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -225,6 +230,25 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       controller.abort()
     }
   }, [activeTicketId, detailRequestVersion, repository])
+
+  useEffect(() => {
+    if (detail || !pendingFocusRestoreRef.current) return
+
+    pendingFocusRestoreRef.current = false
+    const trigger = dialogTriggerRef.current
+    if (trigger?.element.isConnected) {
+      trigger.element.focus()
+      return
+    }
+
+    const replacement = trigger
+      ? document.querySelector<HTMLButtonElement>(
+          `[data-ticket-detail-trigger="${trigger.id}"]`,
+        )
+      : null
+    const focusTarget = replacement ?? resultsHeadingRef.current
+    focusTarget?.focus()
+  }, [detail])
 
   const visibleSnapshot = getSnapshot(list)
 
@@ -413,12 +437,14 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
 
   const bulkPending = bulkUpdate.status === 'pending'
 
-  const openTicket = (id: TicketId) => {
+  const openTicket = (id: TicketId, trigger: HTMLButtonElement) => {
+    dialogTriggerRef.current = { id, element: trigger }
     setActiveTicketId(id)
     setDetail({ status: 'loading', ticketId: id })
   }
 
   const closeTicket = () => {
+    pendingFocusRestoreRef.current = true
     setActiveTicketId(null)
     setDetail(null)
   }

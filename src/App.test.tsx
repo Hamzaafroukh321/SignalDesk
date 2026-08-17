@@ -691,4 +691,50 @@ describe('SignalDesk application shell', () => {
     expect(search).toHaveValue('Billing')
     expect(screen.getByRole('table')).toHaveAccessibleName(/showing 5 of 5/)
   })
+
+  it('contains modal focus, closes with Escape, and restores the trigger', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        repository={createTicketRepository({
+          defaultLatencyMs: 0,
+          plans: {
+            getTicket: [
+              { latencyMs: 0, fault: { message: 'Planned focus test.' } },
+              { latencyMs: 0 },
+            ],
+          },
+        })}
+      />,
+    )
+    await screen.findByRole('table')
+    const trigger = screen.getByRole('button', {
+      name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+    })
+    await user.click(trigger)
+
+    const dialog = await screen.findByRole('dialog')
+    const close = within(dialog).getByRole('button', { name: 'Close details' })
+    const retry = await within(dialog).findByRole('button', {
+      name: 'Retry ticket details',
+    })
+    expect(close).toHaveFocus()
+
+    await user.keyboard('{Shift>}{Tab}{/Shift}')
+    expect(retry).toHaveFocus()
+    await user.keyboard('{Tab}')
+    expect(close).toHaveFocus()
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
+
+    await user.click(trigger)
+    await screen.findByRole('dialog', {
+      name: 'Invoice shows duplicate annual charge',
+    })
+    await user.click(screen.getByRole('button', { name: 'Close details' }))
+    expect(trigger).toHaveFocus()
+    expect(screen.getByRole('searchbox', { name: 'Search tickets' })).not.toHaveFocus()
+  })
 })

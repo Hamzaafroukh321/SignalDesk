@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react'
+import type { KeyboardEvent } from 'react'
 import {
   getPriorityLabel,
   getStatusLabel,
@@ -33,14 +35,68 @@ export function TicketDetailsDialog({
 }: TicketDetailsDialogProps) {
   const ticket = detail.status === 'success' ? detail.ticket : null
   const ticketId = detail.status === 'success' ? detail.ticket.id : detail.ticketId
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    closeButtonRef.current?.focus()
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [])
+
+  const handleDialogKeyDown = (event: KeyboardEvent<HTMLDialogElement>) => {
+    if (event.defaultPrevented) return
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      onClose()
+      return
+    }
+
+    if (event.key !== 'Tab') return
+
+    const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+    ) ?? [])]
+    if (!focusable.length) {
+      event.preventDefault()
+      dialogRef.current?.focus()
+      return
+    }
+
+    const first = focusable[0]
+    const last = focusable.at(-1)
+    if (!first || !last) return
+
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    } else if (!dialogRef.current?.contains(document.activeElement)) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
 
   return (
     <div className="dialog-layer">
       <dialog
+        ref={dialogRef}
         open
         className="ticket-dialog"
         aria-modal="true"
         aria-labelledby="ticket-dialog-title"
+        onKeyDown={handleDialogKeyDown}
+        onCancel={(event) => {
+          event.preventDefault()
+          onClose()
+        }}
       >
         <div className="dialog-header">
           <div>
@@ -51,7 +107,12 @@ export function TicketDetailsDialog({
               {ticket?.title ?? 'Ticket details'}
             </h2>
           </div>
-          <button className="dialog-close" type="button" onClick={onClose}>
+          <button
+            ref={closeButtonRef}
+            className="dialog-close"
+            type="button"
+            onClick={onClose}
+          >
             Close details
           </button>
         </div>
