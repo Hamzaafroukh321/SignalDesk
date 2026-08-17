@@ -9,7 +9,10 @@ import {
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
-import { createTicketRepository } from './data/ticketRepository'
+import {
+  createTicketRepository,
+  type TicketRepository,
+} from './data/ticketRepository'
 import { SAVED_VIEWS_STORAGE_KEY } from './features/tickets/savedViews'
 
 describe('SignalDesk application shell', () => {
@@ -206,6 +209,258 @@ describe('SignalDesk application shell', () => {
     expect(screen.getByRole('table')).toHaveAccessibleName(
       /showing 10 of 24/,
     )
+  })
+
+  it('keeps the active list success when an obsolete failure settles later', async () => {
+    const baseRepository = createTicketRepository({
+      defaultLatencyMs: 0,
+      plans: {
+        listTickets: [
+          { latencyMs: 0 },
+          {
+            latencyMs: 120,
+            fault: { message: 'The obsolete request failed.' },
+          },
+          { latencyMs: 5 },
+        ],
+      },
+    })
+    const queries: string[] = []
+    const repository: TicketRepository = {
+      ...baseRepository,
+      listTickets(query = {}) {
+        queries.push(query.search ?? '')
+        return baseRepository.listTickets(query)
+      },
+    }
+    render(<App repository={repository} />)
+    await screen.findByRole('table')
+    const search = screen.getByRole('searchbox', { name: 'Search tickets' })
+    const results = screen.getByRole('region', { name: 'Ticket results' })
+
+    fireEvent.change(search, { target: { value: 'Billing' } })
+    await waitFor(() => expect(queries.at(-1)).toBe('Billing'))
+    expect(results).toHaveAttribute('aria-busy', 'true')
+    fireEvent.change(search, { target: { value: 'Atlas & Pine' } })
+    await waitFor(() => expect(queries.at(-1)).toBe('Atlas & Pine'))
+
+    expect(
+      await screen.findByRole('table', { name: /showing 1 of 1/ }),
+    ).toBeVisible()
+    expect(results).toHaveAttribute('aria-busy', 'false')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 140))
+    })
+
+    expect(search).toHaveValue('Atlas & Pine')
+    expect(screen.getByRole('table')).toHaveAccessibleName(/showing 1 of 1/)
+    expect(
+      screen.queryByRole('heading', { name: 'Ticket results are unavailable' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByTestId('assertive-operation-announcements'),
+    ).not.toHaveTextContent('Ticket queue failed to load')
+  })
+
+  it('keeps the active list failure when an obsolete success settles later', async () => {
+    const baseRepository = createTicketRepository({
+      defaultLatencyMs: 0,
+      plans: {
+        listTickets: [
+          { latencyMs: 0 },
+          { latencyMs: 120 },
+          {
+            latencyMs: 5,
+            fault: { message: 'The active request failed.' },
+          },
+        ],
+      },
+    })
+    const queries: string[] = []
+    const repository: TicketRepository = {
+      ...baseRepository,
+      listTickets(query = {}) {
+        queries.push(query.search ?? '')
+        return baseRepository.listTickets(query)
+      },
+    }
+    render(<App repository={repository} />)
+    await screen.findByRole('table')
+    const search = screen.getByRole('searchbox', { name: 'Search tickets' })
+    const results = screen.getByRole('region', { name: 'Ticket results' })
+
+    fireEvent.change(search, { target: { value: 'Billing' } })
+    await waitFor(() => expect(queries.at(-1)).toBe('Billing'))
+    fireEvent.change(search, { target: { value: 'Atlas & Pine' } })
+    await waitFor(() => expect(queries.at(-1)).toBe('Atlas & Pine'))
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Ticket results are unavailable',
+      }),
+    ).toBeVisible()
+    expect(results).toHaveAttribute('aria-busy', 'false')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 140))
+    })
+
+    expect(search).toHaveValue('Atlas & Pine')
+    expect(
+      screen.getByRole('heading', { name: 'Ticket results are unavailable' }),
+    ).toBeVisible()
+    expect(window.location.search).toBe('?q=Atlas+%26+Pine')
+  })
+
+  it('keeps loading owned by a slow active request after an obsolete failure', async () => {
+    const baseRepository = createTicketRepository({
+      defaultLatencyMs: 0,
+      plans: {
+        listTickets: [
+          { latencyMs: 0 },
+          {
+            latencyMs: 5,
+            fault: { message: 'The obsolete request failed first.' },
+          },
+          { latencyMs: 120 },
+        ],
+      },
+    })
+    const queries: string[] = []
+    const repository: TicketRepository = {
+      ...baseRepository,
+      listTickets(query = {}) {
+        queries.push(query.search ?? '')
+        return baseRepository.listTickets(query)
+      },
+    }
+    render(<App repository={repository} />)
+    await screen.findByRole('table')
+    const search = screen.getByRole('searchbox', { name: 'Search tickets' })
+    const results = screen.getByRole('region', { name: 'Ticket results' })
+
+    fireEvent.change(search, { target: { value: 'Billing' } })
+    await waitFor(() => expect(queries.at(-1)).toBe('Billing'))
+    fireEvent.change(search, { target: { value: 'Atlas & Pine' } })
+    await waitFor(() => expect(queries.at(-1)).toBe('Atlas & Pine'))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+
+    expect(results).toHaveAttribute('aria-busy', 'true')
+    expect(screen.getByRole('table')).toHaveAccessibleName(/showing 10 of 24/)
+    expect(
+      screen.queryByRole('heading', { name: 'Ticket results are unavailable' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByTestId('assertive-operation-announcements'),
+    ).not.toHaveTextContent('Ticket queue failed to load')
+
+    expect(
+      await screen.findByRole('table', { name: /showing 1 of 1/ }),
+    ).toBeVisible()
+    expect(results).toHaveAttribute('aria-busy', 'false')
+  })
+
+  it('does not let a superseded retry steal focus from a newer search', async () => {
+    const baseRepository = createTicketRepository({
+      defaultLatencyMs: 0,
+      plans: {
+        listTickets: [
+          {
+            latencyMs: 0,
+            fault: { message: 'The initial request failed.' },
+          },
+          { latencyMs: 120 },
+          { latencyMs: 5 },
+        ],
+      },
+    })
+    let callCount = 0
+    const repository: TicketRepository = {
+      ...baseRepository,
+      listTickets(query = {}) {
+        callCount += 1
+        return baseRepository.listTickets(query)
+      },
+    }
+    render(<App repository={repository} />)
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Ticket results are unavailable',
+      }),
+    ).toBeVisible()
+
+    await userEvent.setup().click(
+      screen.getByRole('button', { name: 'Retry loading tickets' }),
+    )
+    await waitFor(() => expect(callCount).toBe(2))
+    const search = screen.getByRole('searchbox', { name: 'Search tickets' })
+    search.focus()
+    fireEvent.change(search, { target: { value: 'Atlas & Pine' } })
+    await waitFor(() => expect(callCount).toBe(3))
+
+    expect(
+      await screen.findByRole('table', { name: /showing 1 of 1/ }),
+    ).toBeVisible()
+    expect(search).toHaveFocus()
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 140))
+    })
+    expect(search).toHaveFocus()
+    expect(screen.getByRole('heading', { name: 'Ticket results' })).not.toHaveFocus()
+  })
+
+  it('aborts obsolete list work on query changes and unmount', async () => {
+    const baseRepository = createTicketRepository({
+      defaultLatencyMs: 0,
+      plans: {
+        listTickets: [
+          { latencyMs: 0 },
+          { latencyMs: 10_000 },
+          { latencyMs: 10_000 },
+        ],
+      },
+    })
+    const signals: AbortSignal[] = []
+    const settlements: Promise<unknown>[] = []
+    const repository: TicketRepository = {
+      ...baseRepository,
+      listTickets(query = {}, options = {}) {
+        if (options.signal) signals.push(options.signal)
+        const request = baseRepository.listTickets(query, options)
+        settlements.push(request.then(() => null, (error: unknown) => error))
+        return request
+      },
+    }
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      const { unmount } = render(<App repository={repository} />)
+      await screen.findByRole('table')
+      const search = screen.getByRole('searchbox', { name: 'Search tickets' })
+
+      fireEvent.change(search, { target: { value: 'Billing' } })
+      await waitFor(() => expect(signals).toHaveLength(2))
+      const obsoleteSignal = signals[1]
+      fireEvent.change(search, { target: { value: 'Atlas & Pine' } })
+      await waitFor(() => expect(signals).toHaveLength(3))
+      expect(obsoleteSignal?.aborted).toBe(true)
+      const activeSignal = signals[2]
+
+      unmount()
+      expect(activeSignal?.aborted).toBe(true)
+      const errors = await Promise.all(settlements.slice(1))
+      expect(errors).toHaveLength(2)
+      errors.forEach((error) => {
+        expect(error).toBeInstanceOf(DOMException)
+        expect((error as DOMException).name).toBe('AbortError')
+      })
+      expect(consoleError.mock.calls.flat().join(' ')).not.toMatch(
+        /unmounted component|state update/i,
+      )
+    } finally {
+      consoleError.mockRestore()
+    }
   })
 
   it('combines search with multiple-value filters and clears filters explicitly', async () => {

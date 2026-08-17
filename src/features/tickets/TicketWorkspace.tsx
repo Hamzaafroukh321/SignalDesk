@@ -193,6 +193,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
           requestId === latestRequestRef.current &&
           !isAbortError(error)
         ) {
+          focusResultsAfterRetryRef.current = false
           listAnnouncementIntentRef.current = null
           announce('Ticket queue failed to load. Retry is available.', {
             priority: 'assertive',
@@ -237,6 +238,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   useEffect(() => {
     const handlePopState = () => {
       const restoredState = parseTicketListState(window.location.search)
+      focusResultsAfterRetryRef.current = false
       listAnnouncementIntentRef.current = 'navigation'
       listStateRef.current = restoredState
       writeTicketListUrl(restoredState, 'replace')
@@ -346,6 +348,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     historyMode: 'push' | 'replace',
     announceResults = true,
   ) => {
+    focusResultsAfterRetryRef.current = false
     listAnnouncementIntentRef.current = announceResults ? 'navigation' : null
     markResultsUpdating()
     listStateRef.current = nextState
