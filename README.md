@@ -22,4 +22,3 @@ The application uses deterministic in-memory data rather than a backend. This ke
 - one cohesive product improvement per milestone
 
 Implementation and development commands will be documented as the application scaffold is established.
-
