@@ -1,6 +1,19 @@
+import { useState } from 'react'
 import type { MouseEvent } from 'react'
+import {
+  createTicketRepository,
+  type TicketRepository,
+} from './data/ticketRepository'
+import { TicketWorkspace } from './features/tickets/TicketWorkspace'
 
-export function App() {
+interface AppProps {
+  repository?: TicketRepository
+}
+
+export function App({ repository }: AppProps) {
+  const [ticketRepository] = useState(
+    () => repository ?? createTicketRepository(),
+  )
   const focusMainContent = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
     document.getElementById('main-content')?.focus()
@@ -42,23 +55,8 @@ export function App() {
             <p>Search and filtering controls will appear here.</p>
           </section>
 
-          <section className="panel results-panel" aria-labelledby="results-title">
-            <div>
-              <p className="panel-kicker">Shared focus</p>
-              <h2 id="results-title">Ticket results</h2>
-            </div>
-            <p>The team ticket queue will appear here.</p>
-          </section>
+          <TicketWorkspace repository={ticketRepository} />
         </div>
-
-        <section className="status-area" aria-labelledby="status-title">
-          <h2 id="status-title" className="visually-hidden">
-            Workspace updates
-          </h2>
-          <p role="status" aria-live="polite" aria-atomic="true">
-            SignalDesk is ready for the queue.
-          </p>
-        </section>
       </main>
     </div>
   )
