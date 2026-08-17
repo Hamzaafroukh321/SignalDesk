@@ -21,4 +21,17 @@ The application uses deterministic in-memory data rather than a backend. This ke
 - stable ticket identity and explicit asynchronous lifecycle handling
 - one cohesive product improvement per milestone
 
-Implementation and development commands will be documented as the application scaffold is established.
+## Local development
+
+SignalDesk requires Node.js 20 and npm 10 or newer. After selecting the runtime listed in `.nvmrc`, install the frozen dependency tree with `npm ci`.
+
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start the local Vite development server. |
+| `npm run build` | Type-check and create a production build. |
+| `npm run lint` | Run the zero-warning source lint gate. |
+| `npm run typecheck` | Run TypeScript without emitting files. |
+| `npm test` | Run the component test suite once. |
+| `npm run check` | Run lint, type-checking, and tests together. |
+
+The static-analysis and component-test harnesses are introduced by the next setup milestones.

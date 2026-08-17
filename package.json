@@ -3,9 +3,18 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=20 <21",
+    "npm": ">=10"
+  },
+  "packageManager": "npm@10.9.2",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build"
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc -b --pretty false",
+    "check": "npm run lint && npm run typecheck && npm test"
   },
   "dependencies": {
     "react": "^19.2.8",
