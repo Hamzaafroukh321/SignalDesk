@@ -20,6 +20,7 @@ interface TicketTableProps {
   onSelectionChange: (id: TicketId, checked: boolean) => void
   onToggleVisible: (checked: boolean) => void
   selectionDisabled: boolean
+  onOpenTicket: (id: TicketId) => void
 }
 
 const dateFormatter = new Intl.DateTimeFormat('en', {
@@ -71,6 +72,7 @@ export function TicketTable({
   onSelectionChange,
   onToggleVisible,
   selectionDisabled,
+  onOpenTicket,
 }: TicketTableProps) {
   const selectVisibleRef = useRef<HTMLInputElement>(null)
   const visibleSelectedCount = tickets.filter((ticket) =>
@@ -154,7 +156,14 @@ export function TicketTable({
               </td>
               <th scope="row">
                 <span className="ticket-id">{ticket.id}</span>
-                <span className="ticket-title">{ticket.title}</span>
+                <button
+                  type="button"
+                  className="ticket-title-button"
+                  aria-label={`Open ${ticket.id} details: ${ticket.title}`}
+                  onClick={() => onOpenTicket(ticket.id)}
+                >
+                  {ticket.title}
+                </button>
               </th>
               <td>{ticket.customer.name}</td>
               <td>

@@ -592,4 +592,103 @@ describe('SignalDesk application shell', () => {
       screen.queryByText(/Selection cleared/),
     ).not.toBeInTheDocument()
   })
+
+  it('loads and presents complete ticket details in an accessible dialog', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        repository={createTicketRepository({
+          defaultLatencyMs: 0,
+          plans: { getTicket: [{ latencyMs: 80 }] },
+        })}
+      />,
+    )
+    await screen.findByRole('table')
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+      }),
+    )
+    const loadingDialog = screen.getByRole('dialog', { name: 'Ticket details' })
+    expect(within(loadingDialog).getByRole('status')).toHaveTextContent(
+      'Loading SD-1048 details…',
+    )
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Invoice shows duplicate annual charge',
+    })
+    const dialogScope = within(dialog)
+    expect(dialogScope.getByText('Atlas & Pine')).toBeVisible()
+    expect(dialogScope.getByText('Unassigned')).toBeVisible()
+    expect(dialogScope.getByRole('heading', { name: 'Description' })).toBeVisible()
+    expect(dialogScope.getByRole('heading', { name: 'Tags' })).toBeVisible()
+    expect(dialogScope.getByText('Billing')).toBeVisible()
+    expect(dialogScope.getByRole('heading', { name: 'Activity' })).toBeVisible()
+    expect(
+      dialogScope.getByText('Ticket created from the customer support queue.'),
+    ).toBeVisible()
+  })
+
+  it('retries a failed ticket detail request', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        repository={createTicketRepository({
+          defaultLatencyMs: 0,
+          plans: {
+            getTicket: [
+              { latencyMs: 0, fault: { message: 'Planned detail failure.' } },
+              { latencyMs: 0 },
+            ],
+          },
+        })}
+      />,
+    )
+    await screen.findByRole('table')
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Open SD-1062 details: Export finished with missing rows',
+      }),
+    )
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Ticket details are unavailable')
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Retry ticket details',
+      }),
+    )
+    expect(
+      await screen.findByRole('dialog', {
+        name: 'Export finished with missing rows',
+      }),
+    ).toBeVisible()
+    expect(screen.queryByText('Ticket details are unavailable')).not.toBeInTheDocument()
+  })
+
+  it('closes details without changing the underlying list state', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    await screen.findByRole('table')
+    const search = screen.getByRole('searchbox', { name: 'Search tickets' })
+    await user.type(search, 'Billing')
+    await screen.findByRole('table', { name: /showing 5 of 5/ })
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+      }),
+    )
+    await screen.findByRole('dialog', {
+      name: 'Invoice shows duplicate annual charge',
+    })
+    await user.click(screen.getByRole('button', { name: 'Close details' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(search).toHaveValue('Billing')
+    expect(screen.getByRole('table')).toHaveAccessibleName(/showing 5 of 5/)
+  })
 })

@@ -21,6 +21,10 @@ import {
   type TicketListState,
 } from './listState'
 import { TicketTable } from './TicketTable'
+import {
+  TicketDetailsDialog,
+  type TicketDetailResource,
+} from './TicketDetailsDialog'
 
 interface TicketWorkspaceProps {
   repository: TicketRepository
@@ -60,6 +64,9 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   const [selectedIds, setSelectedIds] = useState<Set<TicketId>>(() => new Set())
   const [bulkStatus, setBulkStatus] = useState<TicketStatus>('pending')
   const [bulkUpdate, setBulkUpdate] = useState<BulkUpdateState>({ status: 'idle' })
+  const [activeTicketId, setActiveTicketId] = useState<TicketId | null>(null)
+  const [detail, setDetail] = useState<TicketDetailResource | null>(null)
+  const [detailRequestVersion, setDetailRequestVersion] = useState(0)
   const [listState, setListState] = useState(() =>
     parseTicketListState(window.location.search),
   )
@@ -76,6 +83,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   const resultsHeadingRef = useRef<HTMLHeadingElement>(null)
   const focusResultsAfterRetryRef = useRef(false)
   const latestRequestRef = useRef(0)
+  const latestDetailRequestRef = useRef(0)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -185,6 +193,38 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       resultsHeadingRef.current?.focus()
     }
   }, [list.status])
+
+  useEffect(() => {
+    if (!activeTicketId) return
+
+    const controller = new AbortController()
+    const requestId = latestDetailRequestRef.current + 1
+    latestDetailRequestRef.current = requestId
+    const ticketId = activeTicketId
+
+    void repository
+      .getTicket(ticketId, { signal: controller.signal })
+      .then((ticket) => {
+        if (requestId === latestDetailRequestRef.current) {
+          setDetail({ status: 'success', ticket })
+        }
+      })
+      .catch((error: unknown) => {
+        if (
+          requestId === latestDetailRequestRef.current &&
+          !isAbortError(error)
+        ) {
+          setDetail({ status: 'error', ticketId })
+        }
+      })
+
+    return () => {
+      if (latestDetailRequestRef.current === requestId) {
+        latestDetailRequestRef.current += 1
+      }
+      controller.abort()
+    }
+  }, [activeTicketId, detailRequestVersion, repository])
 
   const visibleSnapshot = getSnapshot(list)
 
@@ -372,6 +412,22 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   }
 
   const bulkPending = bulkUpdate.status === 'pending'
+
+  const openTicket = (id: TicketId) => {
+    setActiveTicketId(id)
+    setDetail({ status: 'loading', ticketId: id })
+  }
+
+  const closeTicket = () => {
+    setActiveTicketId(null)
+    setDetail(null)
+  }
+
+  const retryTicket = () => {
+    if (!activeTicketId) return
+    setDetail({ status: 'loading', ticketId: activeTicketId })
+    setDetailRequestVersion((version) => version + 1)
+  }
 
   return (
     <>
@@ -581,6 +637,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
               onSelectionChange={setTicketSelected}
               onToggleVisible={toggleVisibleTickets}
               selectionDisabled={bulkPending}
+              onOpenTicket={openTicket}
             />
           ) : null}
         </>
@@ -673,6 +730,13 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
         </p>
       </div>
       </section>
+      {detail ? (
+        <TicketDetailsDialog
+          detail={detail}
+          onClose={closeTicket}
+          onRetry={retryTicket}
+        />
+      ) : null}
     </>
   )
 }
