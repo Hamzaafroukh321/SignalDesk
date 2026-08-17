@@ -1,10 +1,14 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { App } from './App'
 import { createTicketRepository } from './data/ticketRepository'
 
 describe('SignalDesk application shell', () => {
+  beforeEach(() => {
+    window.history.replaceState(null, '', '/')
+  })
+
   it('provides the landmarks and context for the ticket workspace', () => {
     render(<App />)
 
@@ -304,5 +308,94 @@ describe('SignalDesk application shell', () => {
     expect(screen.getByText('Sorted by Ticket title · Ascending')).toBeVisible()
     expect(previous).toBeDisabled()
     expect(next).toBeDisabled()
+  })
+
+  it('restores search, filters, and sorting from a direct URL', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?q=Billing&status=new&status=open&priority=urgent&sort=title&dir=asc',
+    )
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+
+    expect(screen.getByRole('searchbox', { name: 'Search tickets' })).toHaveValue(
+      'Billing',
+    )
+    expect(screen.getByRole('checkbox', { name: 'New' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Open' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Urgent' })).toBeChecked()
+    expect(
+      await screen.findByRole('table', { name: /showing 2 of 2/ }),
+    ).toBeVisible()
+    expect(screen.getByText('Sorted by Ticket title · Ascending')).toBeVisible()
+  })
+
+  it('restores a valid page and normalizes malformed URL values', async () => {
+    window.history.replaceState(null, '', '/?sort=title&dir=asc&page=2')
+    const { unmount } = render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    expect(await screen.findByText('Page 2 of 3 · 24 results')).toBeVisible()
+    unmount()
+
+    window.history.replaceState(
+      null,
+      '',
+      '/?status=invalid&priority=critical&sort=random&dir=sideways&page=-8',
+    )
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    expect(
+      await screen.findByRole('table', { name: /showing 10 of 24/ }),
+    ).toBeVisible()
+    await waitFor(() => expect(window.location.search).toBe(''))
+    expect(screen.getByText('Sorted by Updated time · Descending')).toBeVisible()
+  })
+
+  it('uses intentional history so Back and Forward restore filter state', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    await screen.findByRole('table')
+
+    const initialHistoryLength = window.history.length
+    const search = screen.getByRole('searchbox', { name: 'Search tickets' })
+    await user.type(search, 'bug')
+    expect(window.history.length).toBe(initialHistoryLength)
+    expect(new URLSearchParams(window.location.search).get('q')).toBe('bug')
+    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+
+    await user.click(screen.getByRole('checkbox', { name: 'New' }))
+    await screen.findByRole('table', { name: /showing 5 of 5/ })
+    await user.click(screen.getByRole('checkbox', { name: 'Open' }))
+    await screen.findByText(/2 active filters: Status New, Open/)
+
+    await act(async () => {
+      const popped = new Promise<void>((resolve) =>
+        window.addEventListener('popstate', () => resolve(), { once: true }),
+      )
+      window.history.back()
+      await popped
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'New' })).toBeChecked()
+      expect(screen.getByRole('checkbox', { name: 'Open' })).not.toBeChecked()
+    })
+
+    await act(async () => {
+      const popped = new Promise<void>((resolve) =>
+        window.addEventListener('popstate', () => resolve(), { once: true }),
+      )
+      window.history.forward()
+      await popped
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'New' })).toBeChecked()
+      expect(screen.getByRole('checkbox', { name: 'Open' })).toBeChecked()
+    })
   })
 })

@@ -11,10 +11,15 @@ import {
 } from '../../domain/ticket'
 import {
   isAbortError,
-  type SortDirection,
   type TicketRepository,
   type TicketSortField,
 } from '../../data/ticketRepository'
+import {
+  parseTicketListState,
+  serializeTicketListState,
+  writeTicketListUrl,
+  type TicketListState,
+} from './listState'
 import { TicketTable } from './TicketTable'
 
 interface TicketWorkspaceProps {
@@ -46,12 +51,19 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     previous: null,
   })
   const [requestVersion, setRequestVersion] = useState(0)
-  const [search, setSearch] = useState('')
-  const [statuses, setStatuses] = useState<TicketStatus[]>([])
-  const [priorities, setPriorities] = useState<TicketPriority[]>([])
-  const [sortBy, setSortBy] = useState<TicketSortField>('updatedAt')
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
-  const [currentPage, setCurrentPage] = useState(1)
+  const [listState, setListState] = useState(() =>
+    parseTicketListState(window.location.search),
+  )
+  const listStateRef = useRef(listState)
+  const {
+    search,
+    statuses,
+    priorities,
+    sortBy,
+    sortDirection,
+    page: currentPage,
+    pageSize,
+  } = listState
   const resultsHeadingRef = useRef<HTMLHeadingElement>(null)
   const focusResultsAfterRetryRef = useRef(false)
   const latestRequestRef = useRef(0)
@@ -70,7 +82,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
           sortBy,
           sortDirection,
           page: currentPage,
-          pageSize: 10,
+          pageSize,
         },
         { signal: controller.signal },
       )
@@ -89,7 +101,15 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
             pageSize: page.pageSize,
           },
         })
-        if (page.page !== currentPage) setCurrentPage(page.page)
+        if (page.page !== currentPage) {
+          const correctedState = {
+            ...listStateRef.current,
+            page: page.page,
+          }
+          listStateRef.current = correctedState
+          setListState(correctedState)
+          writeTicketListUrl(correctedState, 'replace')
+        }
       })
       .catch((error: unknown) => {
         if (
@@ -111,6 +131,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     }
   }, [
     currentPage,
+    pageSize,
     priorities,
     repository,
     requestVersion,
@@ -119,6 +140,33 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     sortDirection,
     statuses,
   ])
+
+  useEffect(() => {
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    const expectedUrl = `${window.location.pathname}${
+      serializeTicketListState(listStateRef.current)
+    }${window.location.hash}`
+
+    if (currentUrl !== expectedUrl) {
+      window.history.replaceState(null, '', expectedUrl)
+    }
+  }, [])
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const restoredState = parseTicketListState(window.location.search)
+      listStateRef.current = restoredState
+      writeTicketListUrl(restoredState, 'replace')
+      setList((current) => ({
+        status: 'loading',
+        previous: getSnapshot(current),
+      }))
+      setListState(restoredState)
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
 
   useEffect(() => {
     if (list.status === 'success' && focusResultsAfterRetryRef.current) {
@@ -150,19 +198,31 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     setRequestVersion((version) => version + 1)
   }
 
-  const beginSearch = (value: string) => {
+  const applyListState = (
+    nextState: TicketListState,
+    historyMode: 'push' | 'replace',
+  ) => {
     markResultsUpdating()
-    setCurrentPage(1)
-    setSearch(value)
+    listStateRef.current = nextState
+    setListState(nextState)
+    writeTicketListUrl(nextState, historyMode)
+  }
+
+  const beginSearch = (value: string) => {
+    applyListState(
+      { ...listStateRef.current, search: value, page: 1 },
+      'replace',
+    )
   }
 
   const setStatusFilter = (status: TicketStatus, checked: boolean) => {
-    markResultsUpdating()
-    setCurrentPage(1)
-    setStatuses((current) =>
-      ticketStatuses.filter((candidate) =>
-        candidate === status ? checked : current.includes(candidate),
-      ),
+    const current = listStateRef.current
+    const nextStatuses = ticketStatuses.filter((candidate) =>
+      candidate === status ? checked : current.statuses.includes(candidate),
+    )
+    applyListState(
+      { ...current, statuses: nextStatuses, page: 1 },
+      'push',
     )
   }
 
@@ -170,31 +230,39 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     priority: TicketPriority,
     checked: boolean,
   ) => {
-    markResultsUpdating()
-    setCurrentPage(1)
-    setPriorities((current) =>
-      ticketPriorities.filter((candidate) =>
-        candidate === priority ? checked : current.includes(candidate),
-      ),
+    const current = listStateRef.current
+    const nextPriorities = ticketPriorities.filter((candidate) =>
+      candidate === priority ? checked : current.priorities.includes(candidate),
+    )
+    applyListState(
+      { ...current, priorities: nextPriorities, page: 1 },
+      'push',
     )
   }
 
   const clearFilters = () => {
-    markResultsUpdating()
-    setCurrentPage(1)
-    setStatuses([])
-    setPriorities([])
+    applyListState(
+      { ...listStateRef.current, statuses: [], priorities: [], page: 1 },
+      'push',
+    )
   }
 
   const sortTickets = (field: TicketSortField) => {
-    markResultsUpdating()
-    setCurrentPage(1)
-    if (field === sortBy) {
-      setSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'))
-      return
-    }
-    setSortBy(field)
-    setSortDirection('asc')
+    const current = listStateRef.current
+    applyListState(
+      {
+        ...current,
+        sortBy: field,
+        sortDirection:
+          field === current.sortBy
+            ? current.sortDirection === 'asc'
+              ? 'desc'
+              : 'asc'
+            : 'asc',
+        page: 1,
+      },
+      'push',
+    )
   }
 
   const activeFilterCount = statuses.length + priorities.length
@@ -207,8 +275,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   }
 
   const goToPage = (page: number) => {
-    markResultsUpdating()
-    setCurrentPage(page)
+    applyListState({ ...listStateRef.current, page }, 'push')
   }
 
   return (
