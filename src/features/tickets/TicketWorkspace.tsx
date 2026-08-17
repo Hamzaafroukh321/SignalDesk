@@ -51,6 +51,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     previous: null,
   })
   const [requestVersion, setRequestVersion] = useState(0)
+  const [selectedIds, setSelectedIds] = useState<Set<TicketId>>(() => new Set())
   const [listState, setListState] = useState(() =>
     parseTicketListState(window.location.search),
   )
@@ -278,6 +279,17 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     applyListState({ ...listStateRef.current, page }, 'push')
   }
 
+  const setTicketSelected = (id: TicketId, checked: boolean) => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (checked) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
+  const clearSelection = () => setSelectedIds(new Set())
+
   return (
     <>
       <section className="panel controls-panel" aria-labelledby="controls-title">
@@ -402,13 +414,32 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       ) : null}
 
       {visibleSnapshot && visibleSnapshot.totalCount > 0 ? (
-        <TicketTable
-          tickets={tickets}
-          totalCount={visibleSnapshot.totalCount}
-          sortBy={sortBy}
-          sortDirection={sortDirection}
-          onSort={sortTickets}
-        />
+        <>
+          <div className="selection-summary">
+            <p>
+              {selectedIds.size}{' '}
+              {selectedIds.size === 1 ? 'ticket' : 'tickets'} selected
+            </p>
+            {selectedIds.size ? (
+              <button
+                className="clear-button"
+                type="button"
+                onClick={clearSelection}
+              >
+                Clear selection
+              </button>
+            ) : null}
+          </div>
+          <TicketTable
+            tickets={tickets}
+            totalCount={visibleSnapshot.totalCount}
+            sortBy={sortBy}
+            sortDirection={sortDirection}
+            onSort={sortTickets}
+            selectedIds={selectedIds}
+            onSelectionChange={setTicketSelected}
+          />
+        </>
       ) : null}
 
       {list.status === 'success' && list.snapshot.totalCount === 0 ? (

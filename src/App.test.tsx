@@ -398,4 +398,48 @@ describe('SignalDesk application shell', () => {
       expect(screen.getByRole('checkbox', { name: 'Open' })).toBeChecked()
     })
   })
+
+  it('keeps ticket selection stable across sort, page, and filter changes', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    await screen.findByRole('table')
+
+    const selectedTicketName =
+      'Select SD-1048: Invoice shows duplicate annual charge'
+    await user.click(screen.getByRole('checkbox', { name: selectedTicketName }))
+    expect(screen.getByText('1 ticket selected')).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Ticket' }))
+    await screen.findByText('Sorted by Ticket title · Ascending')
+    await screen.findByText('10 tickets are ready for review.')
+    expect(screen.getByRole('checkbox', { name: selectedTicketName })).toBeChecked()
+
+    await user.click(screen.getByRole('button', { name: 'Next page' }))
+    expect(await screen.findByText('Page 2 of 3 · 24 results')).toBeVisible()
+    expect(
+      screen.queryByRole('checkbox', { name: selectedTicketName }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('1 ticket selected')).toBeVisible()
+
+    await user.click(screen.getByRole('checkbox', { name: 'Resolved' }))
+    expect(await screen.findByText('Page 1 of 1 · 5 results')).toBeVisible()
+    expect(
+      screen.queryByRole('checkbox', { name: selectedTicketName }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('1 ticket selected')).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Clear all filters' }))
+    expect(
+      await screen.findByRole('checkbox', { name: selectedTicketName }),
+    ).toBeChecked()
+
+    await user.click(screen.getByRole('button', { name: 'Clear selection' }))
+    expect(screen.getByText('0 tickets selected')).toBeVisible()
+    expect(screen.getByRole('checkbox', { name: selectedTicketName })).not.toBeChecked()
+    expect(
+      screen.queryByRole('button', { name: 'Clear selection' }),
+    ).not.toBeInTheDocument()
+  })
 })

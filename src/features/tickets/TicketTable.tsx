@@ -1,4 +1,9 @@
-import { getPriorityLabel, getStatusLabel, type Ticket } from '../../domain/ticket'
+import {
+  getPriorityLabel,
+  getStatusLabel,
+  type Ticket,
+  type TicketId,
+} from '../../domain/ticket'
 import type {
   SortDirection,
   TicketSortField,
@@ -10,6 +15,8 @@ interface TicketTableProps {
   sortBy: TicketSortField
   sortDirection: SortDirection
   onSort: (field: TicketSortField) => void
+  selectedIds: ReadonlySet<TicketId>
+  onSelectionChange: (id: TicketId, checked: boolean) => void
 }
 
 const dateFormatter = new Intl.DateTimeFormat('en', {
@@ -57,6 +64,8 @@ export function TicketTable({
   sortBy,
   sortDirection,
   onSort,
+  selectedIds,
+  onSelectionChange,
 }: TicketTableProps) {
   return (
     <div className="table-scroll">
@@ -66,6 +75,9 @@ export function TicketTable({
         </caption>
         <thead>
           <tr>
+            <th scope="col" className="selection-column">
+              <span className="visually-hidden">Selection</span>
+            </th>
             <SortableHeader
               field="title"
               label="Ticket"
@@ -101,6 +113,16 @@ export function TicketTable({
         <tbody>
           {tickets.map((ticket) => (
             <tr key={ticket.id}>
+              <td className="selection-column">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(ticket.id)}
+                  aria-label={`Select ${ticket.id}: ${ticket.title}`}
+                  onChange={(event) =>
+                    onSelectionChange(ticket.id, event.currentTarget.checked)
+                  }
+                />
+              </td>
               <th scope="row">
                 <span className="ticket-id">{ticket.id}</span>
                 <span className="ticket-title">{ticket.title}</span>
