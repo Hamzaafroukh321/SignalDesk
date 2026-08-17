@@ -740,6 +740,67 @@ textarea {
   box-shadow: 0 2rem 6rem rgb(9 14 28 / 32%);
 }
 
+.dialog-frame {
+  display: contents;
+}
+
+.dialog-frame[inert] {
+  display: none;
+}
+
+.discard-confirmation {
+  width: min(31rem, calc(100vw - 4rem));
+  padding: 1.5rem;
+}
+
+.discard-confirmation h2,
+.discard-confirmation p {
+  margin: 0;
+}
+
+.discard-confirmation h2 {
+  margin-top: 0.3rem;
+  color: #202942;
+  font-size: 1.35rem;
+}
+
+.discard-confirmation > p:last-of-type {
+  margin-top: 0.7rem;
+  color: #566178;
+  line-height: 1.55;
+}
+
+.discard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  justify-content: flex-end;
+  margin-top: 1.25rem;
+}
+
+.discard-actions .secondary-button {
+  margin-top: 0;
+}
+
+.danger-button {
+  padding: 0.6rem 0.85rem;
+  border: 1px solid #a12634;
+  border-radius: 0.5rem;
+  color: #ffffff;
+  background: #a12634;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.danger-button:hover {
+  background: #841d2a;
+}
+
+.danger-button:focus-visible {
+  outline: 3px solid #7c8cff;
+  outline-offset: 2px;
+}
+
 .dialog-header {
   position: sticky;
   z-index: 1;

@@ -816,6 +816,10 @@ describe('SignalDesk application shell', () => {
     expect(dialogScope.getByRole('combobox', { name: 'Status' })).toHaveValue('new')
     expect(dialogScope.getByRole('combobox', { name: 'Assignee' })).toHaveValue('')
     expect(dialogScope.getByRole('checkbox', { name: 'Bug' })).not.toBeChecked()
+    await user.click(dialogScope.getByRole('button', { name: 'Cancel editing' }))
+    await user.click(dialogScope.getByRole('button', { name: 'Close details' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('saves edited fields and reconciles the dialog with the ticket row', async () => {
@@ -869,6 +873,9 @@ describe('SignalDesk application shell', () => {
         name: 'Open SD-1048 details: Corrected annual invoice charge',
       }),
     ).toBeVisible()
+    await user.click(dialogScope.getByRole('button', { name: 'Close details' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('associates multiple edit errors and preserves the draft while correcting them', async () => {
@@ -1166,6 +1173,14 @@ describe('SignalDesk application shell', () => {
       name: 'Open SD-1048 details: Earlier invoice draft',
     })
     await user.click(dialogScope.getByRole('button', { name: 'Close details' }))
+    const pendingSaveConfirmation = screen.getByRole('alertdialog', {
+      name: 'Discard unsaved changes?',
+    })
+    await user.click(
+      within(pendingSaveConfirmation).getByRole('button', {
+        name: 'Discard changes',
+      }),
+    )
 
     await user.click(
       screen.getByRole('button', {
@@ -1359,5 +1374,159 @@ describe('SignalDesk application shell', () => {
     expect(
       screen.getByTestId('assertive-operation-announcements'),
     ).toHaveTextContent('Note not added to SD-1048. Note text retained for retry.')
+  })
+
+  it('closes untouched or fully reverted edits without a discard prompt', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    await screen.findByRole('table')
+    const trigger = screen.getByRole('button', {
+      name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+    })
+
+    await user.click(trigger)
+    let dialog = await screen.findByRole('dialog')
+    let dialogScope = within(dialog)
+    await user.click(dialogScope.getByRole('button', { name: 'Edit ticket' }))
+    await user.click(dialogScope.getByRole('button', { name: 'Close details' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
+
+    await user.click(trigger)
+    dialog = await screen.findByRole('dialog')
+    dialogScope = within(dialog)
+    await user.click(dialogScope.getByRole('button', { name: 'Edit ticket' }))
+    const title = dialogScope.getByRole('textbox', { name: 'Title' })
+    const originalTitle = (title as HTMLInputElement).value
+    await user.type(title, ' temporary change')
+    await user.clear(title)
+    await user.type(title, originalTitle)
+    const bugTag = dialogScope.getByRole('checkbox', { name: 'Bug' })
+    await user.click(bugTag)
+    await user.click(bugTag)
+    await user.click(dialogScope.getByRole('button', { name: 'Close details' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
+  })
+
+  it('keeps a dirty draft on continue and discards it only after confirmation', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    await screen.findByRole('table')
+    const trigger = screen.getByRole('button', {
+      name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+    })
+    await user.click(trigger)
+    let dialog = await screen.findByRole('dialog')
+    let dialogScope = within(dialog)
+    await user.click(dialogScope.getByRole('button', { name: 'Edit ticket' }))
+    const title = dialogScope.getByRole('textbox', { name: 'Title' })
+    const description = dialogScope.getByRole('textbox', { name: 'Description' })
+    await user.clear(title)
+    await user.type(title, 'Unsaved protected invoice draft')
+    description.focus()
+
+    await user.keyboard('{Escape}')
+    let confirmation = screen.getByRole('alertdialog', {
+      name: 'Discard unsaved changes?',
+    })
+    const continueEditing = within(confirmation).getByRole('button', {
+      name: 'Continue editing',
+    })
+    const discard = within(confirmation).getByRole('button', {
+      name: 'Discard changes',
+    })
+    expect(continueEditing).toHaveFocus()
+    await user.keyboard('{Shift>}{Tab}{/Shift}')
+    expect(discard).toHaveFocus()
+    await user.keyboard('{Tab}')
+    expect(continueEditing).toHaveFocus()
+    await user.keyboard('{Escape}')
+
+    dialog = screen.getByRole('dialog', {
+      name: 'Invoice shows duplicate annual charge',
+    })
+    dialogScope = within(dialog)
+    expect(dialogScope.getByRole('textbox', { name: 'Title' })).toHaveValue(
+      'Unsaved protected invoice draft',
+    )
+    expect(description).toHaveFocus()
+
+    await user.click(dialogScope.getByRole('button', { name: 'Close details' }))
+    confirmation = screen.getByRole('alertdialog', {
+      name: 'Discard unsaved changes?',
+    })
+    expect(confirmation).toHaveTextContent(
+      'Closing ticket details will discard the edits in this form.',
+    )
+    await user.click(
+      within(confirmation).getByRole('button', { name: 'Discard changes' }),
+    )
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
+  })
+
+  it('guards a dirty ticket switch and opens the confirmed target read-only', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    await screen.findByRole('table')
+    const firstTrigger = screen.getByRole('button', {
+      name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+    })
+    const secondTrigger = screen.getByRole('button', {
+      name: 'Open SD-1062 details: Export finished with missing rows',
+    })
+    await user.click(firstTrigger)
+    let dialog = await screen.findByRole('dialog')
+    let dialogScope = within(dialog)
+    await user.click(dialogScope.getByRole('button', { name: 'Edit ticket' }))
+    const title = dialogScope.getByRole('textbox', { name: 'Title' })
+    await user.clear(title)
+    await user.type(title, 'Draft that should stay on the first ticket')
+
+    await user.click(secondTrigger)
+    let confirmation = screen.getByRole('alertdialog', {
+      name: 'Discard unsaved changes?',
+    })
+    expect(confirmation).toHaveTextContent(
+      'Opening another ticket will discard the edits in this form.',
+    )
+    await user.click(
+      within(confirmation).getByRole('button', { name: 'Continue editing' }),
+    )
+    expect(
+      screen.getByRole('dialog', {
+        name: 'Invoice shows duplicate annual charge',
+      }),
+    ).toBeVisible()
+    expect(title).toHaveValue('Draft that should stay on the first ticket')
+    expect(title).toHaveFocus()
+
+    await user.click(secondTrigger)
+    confirmation = screen.getByRole('alertdialog', {
+      name: 'Discard unsaved changes?',
+    })
+    await user.click(
+      within(confirmation).getByRole('button', { name: 'Discard changes' }),
+    )
+
+    dialog = await screen.findByRole('dialog', {
+      name: 'Export finished with missing rows',
+    })
+    dialogScope = within(dialog)
+    expect(dialogScope.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument()
+    expect(dialogScope.getByRole('button', { name: 'Close details' })).toHaveFocus()
+    await user.click(dialogScope.getByRole('button', { name: 'Close details' }))
+    expect(secondTrigger).toHaveFocus()
   })
 })

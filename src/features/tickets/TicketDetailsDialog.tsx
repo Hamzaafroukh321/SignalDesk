@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { FocusEvent, KeyboardEvent } from 'react'
 import {
   getPriorityLabel,
   getStatusLabel,
@@ -17,10 +17,15 @@ export type TicketDetailResource =
 
 interface TicketDetailsDialogProps {
   detail: TicketDetailResource
+  authoritativeTicket: Ticket | null
   onClose: () => void
   onRetry: () => void
   onSave: (changes: TicketChanges) => Promise<void>
   onAddNote: (body: string) => Promise<void>
+  onEditDirtyChange: (dirty: boolean) => void
+  discardIntent: 'close' | 'switch' | null
+  onContinueEditing: () => void
+  onDiscardChanges: () => void
 }
 
 const dateTimeFormatter = new Intl.DateTimeFormat('en', {
@@ -35,18 +40,28 @@ function formatDateTime(value: string) {
 
 export function TicketDetailsDialog({
   detail,
+  authoritativeTicket,
   onClose,
   onRetry,
   onSave,
   onAddNote,
+  onEditDirtyChange,
+  discardIntent,
+  onContinueEditing,
+  onDiscardChanges,
 }: TicketDetailsDialogProps) {
   const ticket = detail.status === 'success' ? detail.ticket : null
   const ticketId = detail.status === 'success' ? detail.ticket.id : detail.ticketId
   const dialogRef = useRef<HTMLDialogElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const editButtonRef = useRef<HTMLButtonElement>(null)
+  const confirmationRef = useRef<HTMLDivElement>(null)
+  const continueButtonRef = useRef<HTMLButtonElement>(null)
   const [editing, setEditing] = useState(false)
   const restoreEditFocusRef = useRef(false)
+  const restoreDraftFocusRef = useRef(false)
+  const lastOrdinaryFocusRef = useRef<HTMLElement | null>(null)
+  const previousTicketIdRef = useRef(ticketId)
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
@@ -65,7 +80,30 @@ export function TicketDetailsDialog({
     }
   }, [editing])
 
+  useEffect(() => {
+    if (discardIntent) {
+      continueButtonRef.current?.focus()
+    } else if (restoreDraftFocusRef.current) {
+      restoreDraftFocusRef.current = false
+      const focusTarget = lastOrdinaryFocusRef.current
+      if (focusTarget?.isConnected) focusTarget.focus()
+      else {
+        dialogRef.current
+          ?.querySelector<HTMLInputElement>('#edit-ticket-title')
+          ?.focus()
+      }
+    }
+  }, [discardIntent])
+
+  useEffect(() => {
+    if (previousTicketIdRef.current !== ticketId) {
+      previousTicketIdRef.current = ticketId
+      if (!discardIntent) closeButtonRef.current?.focus()
+    }
+  }, [discardIntent, ticketId])
+
   const finishEditing = () => {
+    onEditDirtyChange(false)
     restoreEditFocusRef.current = true
     setEditing(false)
   }
@@ -75,13 +113,19 @@ export function TicketDetailsDialog({
 
     if (event.key === 'Escape') {
       event.preventDefault()
-      onClose()
+      if (discardIntent) {
+        restoreDraftFocusRef.current = true
+        onContinueEditing()
+      } else {
+        onClose()
+      }
       return
     }
 
     if (event.key !== 'Tab') return
 
-    const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>(
+    const focusRoot = discardIntent ? confirmationRef.current : dialogRef.current
+    const focusable = [...(focusRoot?.querySelectorAll<HTMLElement>(
       'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
     ) ?? [])]
     if (!focusable.length) {
@@ -100,9 +144,15 @@ export function TicketDetailsDialog({
     } else if (!event.shiftKey && document.activeElement === last) {
       event.preventDefault()
       first.focus()
-    } else if (!dialogRef.current?.contains(document.activeElement)) {
+    } else if (!focusRoot?.contains(document.activeElement)) {
       event.preventDefault()
       first.focus()
+    }
+  }
+
+  const rememberDialogFocus = (event: FocusEvent<HTMLDialogElement>) => {
+    if (!discardIntent && event.target instanceof HTMLElement) {
+      lastOrdinaryFocusRef.current = event.target
     }
   }
 
@@ -111,15 +161,29 @@ export function TicketDetailsDialog({
       <dialog
         ref={dialogRef}
         open
+        role={discardIntent ? 'alertdialog' : undefined}
         className="ticket-dialog"
         aria-modal="true"
-        aria-labelledby="ticket-dialog-title"
+        aria-labelledby={
+          discardIntent ? 'discard-changes-title' : 'ticket-dialog-title'
+        }
         onKeyDown={handleDialogKeyDown}
+        onFocusCapture={rememberDialogFocus}
         onCancel={(event) => {
           event.preventDefault()
-          onClose()
+          if (discardIntent) {
+            restoreDraftFocusRef.current = true
+            onContinueEditing()
+          } else {
+            onClose()
+          }
         }}
       >
+        <div
+          className="dialog-frame"
+          aria-hidden={discardIntent ? 'true' : undefined}
+          inert={discardIntent ? true : undefined}
+        >
         <div className="dialog-header">
           <div>
             <p className="panel-kicker">
@@ -176,11 +240,13 @@ export function TicketDetailsDialog({
         {ticket && editing ? (
           <TicketEditForm
             ticket={ticket}
+            authoritativeTicket={authoritativeTicket ?? ticket}
             onSave={async (changes) => {
               await onSave(changes)
               finishEditing()
             }}
             onCancel={finishEditing}
+            onDirtyChange={onEditDirtyChange}
           />
         ) : null}
 
@@ -253,6 +319,43 @@ export function TicketDetailsDialog({
             </section>
 
             <TicketNoteComposer onAddNote={onAddNote} />
+          </div>
+        ) : null}
+        </div>
+
+        {discardIntent ? (
+          <div ref={confirmationRef} className="discard-confirmation">
+            <p className="panel-kicker">Unsaved ticket edits</p>
+            <h2 id="discard-changes-title">Discard unsaved changes?</h2>
+            <p>
+              {discardIntent === 'switch'
+                ? 'Opening another ticket will discard the edits in this form.'
+                : 'Closing ticket details will discard the edits in this form.'}
+            </p>
+            <div className="discard-actions">
+              <button
+                ref={continueButtonRef}
+                className="secondary-button"
+                type="button"
+                onClick={() => {
+                  restoreDraftFocusRef.current = true
+                  onContinueEditing()
+                }}
+              >
+                Continue editing
+              </button>
+              <button
+                className="danger-button"
+                type="button"
+                onClick={() => {
+                  onEditDirtyChange(false)
+                  setEditing(false)
+                  onDiscardChanges()
+                }}
+              >
+                Discard changes
+              </button>
+            </div>
           </div>
         ) : null}
       </dialog>

@@ -37,8 +37,10 @@ const DESCRIPTION_MAX_LENGTH = 2_000
 
 interface TicketEditFormProps {
   ticket: Ticket
+  authoritativeTicket: Ticket
   onSave: (changes: TicketChanges) => Promise<void>
   onCancel: () => void
+  onDirtyChange: (dirty: boolean) => void
 }
 
 function createDraft(ticket: Ticket): TicketDraft {
@@ -85,11 +87,33 @@ function validateDraft(draft: TicketDraft) {
   return errors
 }
 
+function draftsMatch(first: TicketDraft, second: TicketDraft) {
+  if (
+    first.title !== second.title ||
+    first.status !== second.status ||
+    first.priority !== second.priority ||
+    first.assigneeId !== second.assigneeId ||
+    first.description !== second.description ||
+    first.tagIds.length !== second.tagIds.length
+  ) {
+    return false
+  }
+
+  const firstTagIds = [...first.tagIds].sort()
+  const secondTagIds = [...second.tagIds].sort()
+  return firstTagIds.every((tagId, index) => tagId === secondTagIds[index])
+}
+
 export function TicketEditForm({
   ticket,
+  authoritativeTicket,
   onSave,
   onCancel,
+  onDirtyChange,
 }: TicketEditFormProps) {
+  const [baseline, setBaseline] = useState(() =>
+    createDraft(authoritativeTicket),
+  )
   const [draft, setDraft] = useState(() => createDraft(ticket))
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<SaveError | null>(null)
@@ -99,6 +123,7 @@ export function TicketEditForm({
   const titleRef = useRef<HTMLInputElement>(null)
   const errorSummaryRef = useRef<HTMLDivElement>(null)
   const savingRef = useRef(false)
+  const baselineVersionRef = useRef(authoritativeTicket.version)
 
   useEffect(() => {
     titleRef.current?.focus()
@@ -107,6 +132,19 @@ export function TicketEditForm({
   useEffect(() => {
     if (summaryFocusRequest > 0) errorSummaryRef.current?.focus()
   }, [summaryFocusRequest])
+
+  useEffect(() => {
+    if (authoritativeTicket.version > baselineVersionRef.current) {
+      baselineVersionRef.current = authoritativeTicket.version
+      setBaseline(createDraft(authoritativeTicket))
+    }
+  }, [authoritativeTicket])
+
+  const dirty = !draftsMatch(baseline, draft)
+
+  useEffect(() => {
+    onDirtyChange(dirty)
+  }, [dirty, onDirtyChange])
 
   const updateValidationError = (field: ValidatedField, value: string) => {
     setValidationErrors((current) => {

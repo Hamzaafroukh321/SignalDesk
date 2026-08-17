@@ -58,6 +58,10 @@ interface OptimisticSave {
   ticket: Ticket
 }
 
+type PendingDialogIntent =
+  | { kind: 'close' }
+  | { kind: 'switch'; id: TicketId; trigger: HTMLButtonElement }
+
 function getSnapshot(list: ListResource): TicketListSnapshot | null {
   if (list.status === 'success') return list.snapshot
   return list.previous
@@ -86,6 +90,9 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   const [bulkUpdate, setBulkUpdate] = useState<BulkUpdateState>({ status: 'idle' })
   const [activeTicketId, setActiveTicketId] = useState<TicketId | null>(null)
   const [detail, setDetail] = useState<TicketDetailResource | null>(null)
+  const [editDirty, setEditDirty] = useState(false)
+  const [pendingDialogIntent, setPendingDialogIntent] =
+    useState<PendingDialogIntent | null>(null)
   const [optimisticSaves, setOptimisticSaves] = useState<
     ReadonlyMap<TicketId, OptimisticSave>
   >(() => new Map())
@@ -501,16 +508,46 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
 
   const bulkPending = bulkUpdate.status === 'pending'
 
-  const openTicket = (id: TicketId, trigger: HTMLButtonElement) => {
+  const performOpenTicket = (id: TicketId, trigger: HTMLButtonElement) => {
     dialogTriggerRef.current = { id, element: trigger }
+    setEditDirty(false)
+    setPendingDialogIntent(null)
     setActiveTicketId(id)
     setDetail({ status: 'loading', ticketId: id })
   }
 
-  const closeTicket = () => {
+  const openTicket = (id: TicketId, trigger: HTMLButtonElement) => {
+    if (activeTicketId === id) return
+    if (activeTicketId && editDirty) {
+      setPendingDialogIntent({ kind: 'switch', id, trigger })
+      return
+    }
+    performOpenTicket(id, trigger)
+  }
+
+  const performCloseTicket = () => {
     pendingFocusRestoreRef.current = true
+    setEditDirty(false)
+    setPendingDialogIntent(null)
     setActiveTicketId(null)
     setDetail(null)
+  }
+
+  const closeTicket = () => {
+    if (editDirty) {
+      setPendingDialogIntent({ kind: 'close' })
+      return
+    }
+    performCloseTicket()
+  }
+
+  const continueEditing = () => setPendingDialogIntent(null)
+
+  const discardPendingEdits = () => {
+    const intent = pendingDialogIntent
+    if (!intent) return
+    if (intent.kind === 'close') performCloseTicket()
+    else performOpenTicket(intent.id, intent.trigger)
   }
 
   const retryTicket = () => {
@@ -942,10 +979,17 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       {visibleDetail ? (
         <TicketDetailsDialog
           detail={visibleDetail}
+          authoritativeTicket={
+            detail?.status === 'success' ? detail.ticket : null
+          }
           onClose={closeTicket}
           onRetry={retryTicket}
           onSave={saveActiveTicket}
           onAddNote={addNoteToActiveTicket}
+          onEditDirtyChange={setEditDirty}
+          discardIntent={pendingDialogIntent?.kind ?? null}
+          onContinueEditing={continueEditing}
+          onDiscardChanges={discardPendingEdits}
         />
       ) : null}
     </>
