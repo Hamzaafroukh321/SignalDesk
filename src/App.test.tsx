@@ -10,10 +10,12 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
 import { createTicketRepository } from './data/ticketRepository'
+import { SAVED_VIEWS_STORAGE_KEY } from './features/tickets/savedViews'
 
 describe('SignalDesk application shell', () => {
   beforeEach(() => {
     window.history.replaceState(null, '', '/')
+    window.localStorage.clear()
   })
 
   it('provides the landmarks and context for the ticket workspace', () => {
@@ -365,6 +367,43 @@ describe('SignalDesk application shell', () => {
     expect(screen.getByText('Sorted by Updated time · Descending')).toBeVisible()
   })
 
+  it('resets the page for page-size changes and restores them through history', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    await screen.findByText('Page 1 of 3 · 24 results')
+    await user.click(screen.getByRole('button', { name: 'Next page' }))
+    expect(await screen.findByText('Page 2 of 3 · 24 results')).toBeVisible()
+
+    const pageSize = screen.getByRole('combobox', {
+      name: 'Tickets per page',
+    })
+    await user.selectOptions(pageSize, '20')
+    expect(await screen.findByText('Page 1 of 2 · 24 results')).toBeVisible()
+    expect(window.location.search).toBe('?size=20')
+
+    await act(async () => {
+      const popped = new Promise<void>((resolve) =>
+        window.addEventListener('popstate', () => resolve(), { once: true }),
+      )
+      window.history.back()
+      await popped
+    })
+    await waitFor(() => expect(pageSize).toHaveValue('10'))
+    expect(await screen.findByText('Page 2 of 3 · 24 results')).toBeVisible()
+
+    await act(async () => {
+      const popped = new Promise<void>((resolve) =>
+        window.addEventListener('popstate', () => resolve(), { once: true }),
+      )
+      window.history.forward()
+      await popped
+    })
+    await waitFor(() => expect(pageSize).toHaveValue('20'))
+    expect(await screen.findByText('Page 1 of 2 · 24 results')).toBeVisible()
+  })
+
   it('uses intentional history so Back and Forward restore filter state', async () => {
     const user = userEvent.setup()
     render(
@@ -407,6 +446,229 @@ describe('SignalDesk application shell', () => {
       expect(screen.getByRole('checkbox', { name: 'New' })).toBeChecked()
       expect(screen.getByRole('checkbox', { name: 'Open' })).toBeChecked()
     })
+  })
+
+  it('saves, applies, renames, and deletes a complete local list view', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    await screen.findByRole('table')
+
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: 'Select SD-1048: Invoice shows duplicate annual charge',
+      }),
+    )
+    const search = screen.getByRole('searchbox', { name: 'Search tickets' })
+    const pageSize = screen.getByRole('combobox', {
+      name: 'Tickets per page',
+    })
+    await user.type(search, 'Billing')
+    await user.click(screen.getByRole('checkbox', { name: 'New' }))
+    await user.selectOptions(pageSize, '5')
+    await user.click(screen.getByRole('button', { name: 'Ticket' }))
+    expect(
+      await screen.findByText('Sorted by Ticket title · Ascending'),
+    ).toBeVisible()
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'View name' }),
+      'Billing triage',
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Save current view' }),
+    )
+    const savedViews = screen.getByRole('region', { name: 'Saved views' })
+    expect(within(savedViews).getByText('Saved view Billing triage.')).toBeVisible()
+
+    const storedRaw = window.localStorage.getItem(SAVED_VIEWS_STORAGE_KEY)
+    expect(storedRaw).not.toBeNull()
+    expect(JSON.parse(storedRaw ?? '')).toEqual({
+      version: 1,
+      views: [
+        {
+          id: 'view-1',
+          name: 'Billing triage',
+          definition: {
+            search: 'Billing',
+            statuses: ['new'],
+            priorities: [],
+            sortBy: 'title',
+            sortDirection: 'asc',
+            pageSize: 5,
+          },
+        },
+      ],
+    })
+    expect(storedRaw).not.toContain('"page"')
+    expect(storedRaw).not.toContain('selected')
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+    await user.click(screen.getByRole('button', { name: 'Clear all filters' }))
+    await user.selectOptions(pageSize, '10')
+    await user.click(screen.getByRole('button', { name: 'Ticket' }))
+    expect(
+      await screen.findByText('Sorted by Ticket title · Descending'),
+    ).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Next page' }))
+    expect(await screen.findByText('Page 2 of 3 · 24 results')).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Apply Billing triage' }))
+    await waitFor(() => {
+      expect(search).toHaveValue('Billing')
+      expect(screen.getByRole('checkbox', { name: 'New' })).toBeChecked()
+      expect(pageSize).toHaveValue('5')
+    })
+    expect(
+      await screen.findByText('Sorted by Ticket title · Ascending'),
+    ).toBeVisible()
+    expect(await screen.findByText(/Page 1 of 1 · \d+ results/)).toBeVisible()
+    expect(screen.getByText('1 ticket selected')).toBeVisible()
+    const restoredParameters = new URLSearchParams(window.location.search)
+    expect(restoredParameters.get('q')).toBe('Billing')
+    expect(restoredParameters.getAll('status')).toEqual(['new'])
+    expect(restoredParameters.get('sort')).toBe('title')
+    expect(restoredParameters.get('dir')).toBe('asc')
+    expect(restoredParameters.get('size')).toBe('5')
+    expect(restoredParameters.get('page')).toBeNull()
+
+    await user.click(
+      screen.getByRole('button', { name: 'Rename Billing triage' }),
+    )
+    const rename = screen.getByRole('textbox', {
+      name: 'New name for Billing triage',
+    })
+    expect(rename).toHaveFocus()
+    await user.clear(rename)
+    await user.type(rename, 'Finance queue')
+    await user.click(screen.getByRole('button', { name: 'Save rename' }))
+    expect(
+      within(savedViews).getByText(
+        'Renamed view Billing triage to Finance queue.',
+      ),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: 'Apply Finance queue' }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: 'Rename Finance queue' }),
+    ).toHaveFocus()
+
+    await user.click(
+      screen.getByRole('button', { name: 'Delete Finance queue' }),
+    )
+    expect(
+      within(savedViews).getByText('Deleted view Finance queue.'),
+    ).toBeVisible()
+    expect(screen.getByText('No saved views yet.')).toBeVisible()
+    expect(screen.getByRole('textbox', { name: 'View name' })).toHaveFocus()
+  }, 10_000)
+
+  it('preserves an in-progress rename when another saved view is deleted', async () => {
+    const user = userEvent.setup()
+    const definition = {
+      search: '',
+      statuses: [],
+      priorities: [],
+      sortBy: 'updatedAt',
+      sortDirection: 'desc',
+      pageSize: 10,
+    }
+    window.localStorage.setItem(
+      SAVED_VIEWS_STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        views: [
+          { id: 'view-1', name: 'Morning queue', definition },
+          { id: 'view-2', name: 'Evening queue', definition },
+        ],
+      }),
+    )
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: 'Rename Morning queue' }),
+    )
+    const rename = screen.getByRole('textbox', {
+      name: 'New name for Morning queue',
+    })
+    await user.clear(rename)
+    await user.type(rename, 'Morning priority')
+    await user.click(
+      screen.getByRole('button', { name: 'Delete Evening queue' }),
+    )
+
+    expect(rename).toHaveValue('Morning priority')
+    expect(rename).toHaveFocus()
+    expect(
+      screen.queryByRole('button', { name: 'Apply Evening queue' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('ignores malformed saved-view data without interrupting the queue', async () => {
+    window.localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, '{not valid json')
+
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+
+    expect(
+      screen.getByText('Saved view data was malformed and has been ignored.'),
+    ).toBeVisible()
+    expect(await screen.findByRole('table')).toBeVisible()
+    expect(screen.getByText('No saved views yet.')).toBeVisible()
+  })
+
+  it('keeps saved-view controls and list controls usable after a storage failure', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    await screen.findByRole('table')
+    const storageWrite = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new DOMException('Storage blocked', 'QuotaExceededError')
+      })
+
+    try {
+      const name = screen.getByRole('textbox', { name: 'View name' })
+      const save = screen.getByRole('button', { name: 'Save current view' })
+      await user.click(save)
+      expect(name).toHaveFocus()
+      expect(name).toHaveAttribute('aria-invalid', 'true')
+      expect(name).toHaveAccessibleDescription('Enter a view name.')
+      await user.type(name, 'Retry this view')
+      expect(name).not.toHaveAttribute('aria-invalid')
+      await user.click(save)
+
+      const savedViews = screen.getByRole('region', { name: 'Saved views' })
+      expect(
+        within(savedViews).getByText(
+          'SignalDesk could not store that change. Your saved views were not changed.',
+        ),
+      ).toBeVisible()
+      expect(
+        screen.getByTestId('assertive-operation-announcements'),
+      ).toHaveTextContent(
+        'SignalDesk could not store that change. Your saved views were not changed.',
+      )
+      expect(name).toHaveValue('Retry this view')
+      expect(screen.getByText('No saved views yet.')).toBeVisible()
+      expect(
+        screen.queryByRole('button', { name: 'Apply Retry this view' }),
+      ).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('checkbox', { name: 'New' }))
+      expect(
+        await screen.findByRole('table', { name: /showing 5 of 5/ }),
+      ).toBeVisible()
+    } finally {
+      storageWrite.mockRestore()
+    }
   })
 
   it('keeps ticket selection stable across sort, page, and filter changes', async () => {

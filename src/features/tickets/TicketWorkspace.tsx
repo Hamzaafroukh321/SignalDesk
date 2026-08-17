@@ -19,9 +19,16 @@ import {
 import {
   parseTicketListState,
   serializeTicketListState,
+  ticketPageSizes,
   writeTicketListUrl,
   type TicketListState,
+  type TicketPageSize,
 } from './listState'
+import { SavedViewsPanel } from './SavedViewsPanel'
+import {
+  createSavedViewDefinition,
+  type SavedViewDefinition,
+} from './savedViews'
 import { TicketTable } from './TicketTable'
 import {
   TicketDetailsDialog,
@@ -417,6 +424,28 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     applyListState({ ...listStateRef.current, page }, 'push')
   }
 
+  const setPageSize = (nextPageSize: TicketPageSize) => {
+    applyListState(
+      { ...listStateRef.current, page: 1, pageSize: nextPageSize },
+      'push',
+    )
+  }
+
+  const applySavedView = (definition: SavedViewDefinition) => {
+    applyListState(
+      {
+        search: definition.search,
+        statuses: [...definition.statuses],
+        priorities: [...definition.priorities],
+        sortBy: definition.sortBy,
+        sortDirection: definition.sortDirection,
+        page: 1,
+        pageSize: definition.pageSize,
+      },
+      'push',
+    )
+  }
+
   const setTicketSelected = (id: TicketId, checked: boolean) => {
     setSelectedIds((current) => {
       const next = new Set(current)
@@ -763,6 +792,31 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
             </button>
           ) : null}
         </div>
+
+        <div className="page-size-control">
+          <label htmlFor="ticket-page-size">Tickets per page</label>
+          <select
+            id="ticket-page-size"
+            value={pageSize}
+            onChange={(event) => {
+              const nextPageSize = Number(
+                event.currentTarget.value,
+              ) as TicketPageSize
+              setPageSize(nextPageSize)
+            }}
+          >
+            {ticketPageSizes.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <SavedViewsPanel
+          currentDefinition={createSavedViewDefinition(listState)}
+          onApply={applySavedView}
+        />
       </section>
 
       <section

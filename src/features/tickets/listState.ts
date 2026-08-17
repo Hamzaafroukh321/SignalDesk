@@ -18,8 +18,11 @@ export interface TicketListState {
   sortBy: TicketSortField
   sortDirection: SortDirection
   page: number
-  pageSize: number
+  pageSize: TicketPageSize
 }
+
+export const ticketPageSizes = [5, 10, 20] as const
+export type TicketPageSize = (typeof ticketPageSizes)[number]
 
 export const defaultTicketListState: TicketListState = {
   search: '',
@@ -48,6 +51,12 @@ function parsePage(value: string | null): number {
   return Number.isSafeInteger(page) && page > 0 ? page : 1
 }
 
+function parsePageSize(value: string | null): TicketPageSize {
+  return (
+    ticketPageSizes.find((pageSize) => String(pageSize) === value) ?? 10
+  )
+}
+
 export function parseTicketListState(search: string): TicketListState {
   const parameters = new URLSearchParams(search)
   const requestedStatuses = parameters
@@ -73,7 +82,7 @@ export function parseTicketListState(search: string): TicketListState {
         ? requestedDirection
         : 'desc',
     page: parsePage(parameters.get('page')),
-    pageSize: 10,
+    pageSize: parsePageSize(parameters.get('size')),
   }
 }
 
@@ -89,6 +98,7 @@ export function serializeTicketListState(state: TicketListState): string {
     parameters.set('dir', state.sortDirection)
   }
   if (state.page > 1) parameters.set('page', String(state.page))
+  if (state.pageSize !== 10) parameters.set('size', String(state.pageSize))
 
   const query = parameters.toString()
   return query ? `?${query}` : ''

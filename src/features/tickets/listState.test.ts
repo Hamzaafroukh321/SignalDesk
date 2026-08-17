@@ -15,6 +15,7 @@ describe('ticket list URL state', () => {
       sortBy: 'title' as const,
       sortDirection: 'asc' as const,
       page: 3,
+      pageSize: 20 as const,
     }
     const serialized = serializeTicketListState({
       ...state,
@@ -42,5 +43,14 @@ describe('ticket list URL state', () => {
 
   it('omits default values from a clean shareable URL', () => {
     expect(serializeTicketListState(defaultTicketListState)).toBe('')
+  })
+
+  it('normalizes an unsupported page size', () => {
+    expect(parseTicketListState('?size=17').pageSize).toBe(10)
+    expect(parseTicketListState('?size=1e1').pageSize).toBe(10)
+    expect(parseTicketListState('?size=0x14').pageSize).toBe(10)
+    expect(parseTicketListState('?size=020').pageSize).toBe(10)
+    expect(parseTicketListState('?size=5').pageSize).toBe(5)
+    expect(parseTicketListState('?size=20').pageSize).toBe(20)
   })
 })

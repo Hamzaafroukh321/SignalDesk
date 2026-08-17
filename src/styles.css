@@ -331,6 +331,138 @@ textarea {
   margin-top: 0.55rem;
 }
 
+.page-size-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.page-size-control label,
+.save-view-form label,
+.rename-view-form label {
+  color: #2c3650;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.page-size-control select,
+.save-view-form input,
+.rename-view-form input {
+  min-height: 2.5rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #bdc5d4;
+  border-radius: 0.55rem;
+  color: #202942;
+  background: #ffffff;
+}
+
+.page-size-control select:focus-visible,
+.save-view-form input:focus-visible,
+.rename-view-form input:focus-visible {
+  border-color: #6878df;
+  outline: 3px solid rgb(104 120 223 / 24%);
+  outline-offset: 1px;
+}
+
+.save-view-form input[aria-invalid='true'],
+.rename-view-form input[aria-invalid='true'] {
+  border-color: #b53243;
+}
+
+.saved-views {
+  margin-top: 1.4rem;
+  padding-top: 1.35rem;
+  border-top: 1px solid #e5e8ef;
+}
+
+.saved-views h3 {
+  margin: 0;
+  color: #2c3650;
+  font-size: 1rem;
+}
+
+.saved-views .panel-kicker {
+  margin-bottom: 0.35rem;
+}
+
+.save-view-form,
+.rename-view-form {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 1rem;
+}
+
+.save-view-form > div,
+.rename-view-form > div,
+.saved-view-list li > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.save-view-form input,
+.rename-view-form input {
+  width: 100%;
+  min-width: 0;
+}
+
+.save-view-form .secondary-button,
+.rename-view-form .secondary-button,
+.saved-view-list .secondary-button {
+  margin-top: 0;
+}
+
+.saved-view-feedback,
+.saved-view-empty {
+  margin: 0.8rem 0 0;
+  color: #647086;
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
+.saved-view-feedback.error-feedback {
+  color: #982c3b;
+}
+
+.saved-view-feedback.success-feedback {
+  color: #2e684c;
+}
+
+.saved-view-list {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  margin: 1rem 0 0;
+  list-style: none;
+}
+
+.saved-view-list li {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  border: 1px solid #e0e4ed;
+  border-radius: 0.65rem;
+  background: #fafbfe;
+}
+
+.saved-view-list li > span {
+  overflow-wrap: anywhere;
+  color: #313c55;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.saved-view-list .clear-button {
+  justify-self: auto;
+}
+
+.danger-text-button {
+  color: #a62d3f;
+}
+
 .result-state h3,
 .result-state p {
   margin: 0;
