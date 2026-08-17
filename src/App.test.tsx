@@ -848,4 +848,72 @@ describe('SignalDesk application shell', () => {
       }),
     ).toBeVisible()
   })
+
+  it('associates multiple edit errors and preserves the draft while correcting them', async () => {
+    const user = userEvent.setup()
+    render(
+      <App repository={createTicketRepository({ defaultLatencyMs: 0 })} />,
+    )
+    await screen.findByRole('table')
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+      }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    const dialogScope = within(dialog)
+    await user.click(dialogScope.getByRole('button', { name: 'Edit ticket' }))
+
+    const title = dialogScope.getByRole('textbox', { name: 'Title' })
+    const description = dialogScope.getByRole('textbox', {
+      name: 'Description',
+    })
+    const priority = dialogScope.getByRole('combobox', { name: 'Priority' })
+    await user.clear(title)
+    await user.type(title, 'No')
+    await user.clear(description)
+    await user.selectOptions(priority, 'high')
+    await user.click(dialogScope.getByRole('button', { name: 'Save ticket' }))
+
+    const summary = dialogScope.getByRole('alert')
+    expect(summary).toHaveFocus()
+    expect(summary).toHaveTextContent('Fix 2 errors before saving')
+    expect(summary).toHaveTextContent('Title must be at least 4 characters.')
+    expect(summary).toHaveTextContent('Enter a ticket description.')
+    expect(title).toHaveAttribute('aria-invalid', 'true')
+    expect(title).toHaveAccessibleDescription(
+      /4–120 characters Title must be at least 4 characters/,
+    )
+    expect(description).toHaveAttribute('aria-invalid', 'true')
+    expect(description).toHaveAccessibleDescription(
+      /20–2,000 characters Enter a ticket description/,
+    )
+
+    await user.clear(title)
+    await user.type(title, 'Corrected invoice title')
+    expect(title).not.toHaveAttribute('aria-invalid')
+    expect(dialogScope.getByRole('alert')).toHaveTextContent(
+      'Fix 1 error before saving',
+    )
+    expect(description).toHaveValue('')
+    expect(priority).toHaveValue('high')
+
+    await user.type(description, 'Still short')
+    expect(dialogScope.getByRole('alert')).toHaveTextContent(
+      'Description must be at least 20 characters.',
+    )
+    await user.clear(description)
+    await user.type(
+      description,
+      'The finance team confirmed the corrected invoice details.',
+    )
+    expect(description).not.toHaveAttribute('aria-invalid')
+    expect(dialogScope.queryByRole('alert')).not.toBeInTheDocument()
+    expect(priority).toHaveValue('high')
+
+    await user.click(dialogScope.getByRole('button', { name: 'Save ticket' }))
+    expect(
+      await screen.findByRole('dialog', { name: 'Corrected invoice title' }),
+    ).toBeVisible()
+  })
 })

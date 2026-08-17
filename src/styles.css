@@ -860,6 +860,50 @@ textarea {
   line-height: 1.5;
 }
 
+.edit-field-hint,
+.edit-field-error {
+  margin: 0.32rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.edit-field-hint {
+  color: #657087;
+}
+
+.edit-field-error {
+  color: #a12634;
+  font-weight: 700;
+}
+
+.edit-field [aria-invalid='true'] {
+  border-color: #b52e40;
+}
+
+.edit-error-summary {
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #dc8090;
+  border-radius: 0.6rem;
+  color: #781d2a;
+  background: #fff5f6;
+}
+
+.edit-error-summary:focus-visible {
+  outline: 3px solid #7c8cff;
+  outline-offset: 2px;
+}
+
+.edit-error-summary h3 {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.edit-error-summary ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.2rem;
+  font-size: 0.76rem;
+}
+
 .edit-field input:focus-visible,
 .edit-field select:focus-visible,
 .edit-field textarea:focus-visible,
