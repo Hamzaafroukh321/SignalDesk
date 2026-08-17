@@ -134,6 +134,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     pageSize,
   } = listState
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const firstStatusFilterRef = useRef<HTMLInputElement>(null)
   const resultsHeadingRef = useRef<HTMLHeadingElement>(null)
   const focusResultsAfterRetryRef = useRef(false)
   const latestRequestRef = useRef(0)
@@ -388,6 +389,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   }
 
   const retry = () => {
+    resultsHeadingRef.current?.focus()
     focusResultsAfterRetryRef.current = true
     listAnnouncementIntentRef.current = 'retry'
     markResultsUpdating()
@@ -411,8 +413,12 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     applyListState(
       { ...listStateRef.current, search: value, page: 1 },
       'replace',
-      false,
     )
+  }
+
+  const clearSearch = () => {
+    beginSearch('')
+    searchInputRef.current?.focus()
   }
 
   const setStatusFilter = (status: TicketStatus, checked: boolean) => {
@@ -445,6 +451,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
       { ...listStateRef.current, statuses: [], priorities: [], page: 1 },
       'push',
     )
+    firstStatusFilterRef.current?.focus()
   }
 
   const sortTickets = (field: TicketSortField) => {
@@ -509,7 +516,10 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     })
   }, [])
 
-  const clearSelection = () => setSelectedIds(new Set())
+  const clearSelection = () => {
+    setSelectedIds(new Set())
+    resultsHeadingRef.current?.focus()
+  }
   const visibleSelectedCount = tickets.filter((ticket) =>
     selectedIds.has(ticket.id),
   ).length
@@ -824,7 +834,7 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
               <button
                 className="clear-button"
                 type="button"
-                onClick={() => beginSearch('')}
+                onClick={clearSearch}
               >
                 Clear search
               </button>
@@ -835,9 +845,10 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
         <div className="filter-groups">
           <fieldset>
             <legend>Status</legend>
-            {ticketStatuses.map((status) => (
+            {ticketStatuses.map((status, index) => (
               <label key={status} className="filter-option">
                 <input
+                  ref={index === 0 ? firstStatusFilterRef : undefined}
                   type="checkbox"
                   checked={statuses.includes(status)}
                   onChange={(event) =>
@@ -974,7 +985,11 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
               </button>
             ) : null}
           </div>
-          <div className="bulk-actions" aria-labelledby="bulk-actions-title">
+          <div
+            className="bulk-actions"
+            role="group"
+            aria-labelledby="bulk-actions-title"
+          >
             <div>
               <h3 id="bulk-actions-title">Bulk status update</h3>
               <p>Selection clears after a successful bulk update.</p>
@@ -1114,7 +1129,9 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
               : 'Loading the ticket queue…'
             : null}
           {list.status === 'success' && list.snapshot.totalCount > 0
-            ? `${tickets.length} tickets are ready for review.`
+            ? `${tickets.length} ${
+                tickets.length === 1 ? 'ticket is' : 'tickets are'
+              } ready for review.`
             : null}
           {list.status === 'success' && list.snapshot.totalCount === 0
             ? 'No tickets match the current queue view.'

@@ -156,6 +156,11 @@ export function TicketDetailsDialog({
     }
   }
 
+  const retryDetails = () => {
+    closeButtonRef.current?.focus()
+    onRetry()
+  }
+
   return (
     <div className="dialog-layer">
       <dialog
@@ -166,6 +171,9 @@ export function TicketDetailsDialog({
         aria-modal="true"
         aria-labelledby={
           discardIntent ? 'discard-changes-title' : 'ticket-dialog-title'
+        }
+        aria-describedby={
+          discardIntent ? 'discard-changes-description' : undefined
         }
         onKeyDown={handleDialogKeyDown}
         onFocusCapture={rememberDialogFocus}
@@ -231,7 +239,11 @@ export function TicketDetailsDialog({
             <div>
               <h3>Ticket details are unavailable</h3>
               <p>SignalDesk could not load {detail.ticketId}. The queue is unchanged.</p>
-              <button className="secondary-button" type="button" onClick={onRetry}>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={retryDetails}
+              >
                 Retry ticket details
               </button>
             </div>
@@ -328,7 +340,7 @@ export function TicketDetailsDialog({
           <div ref={confirmationRef} className="discard-confirmation">
             <p className="panel-kicker">Unsaved ticket edits</p>
             <h2 id="discard-changes-title">Discard unsaved changes?</h2>
-            <p>
+            <p id="discard-changes-description">
               {discardIntent === 'switch'
                 ? 'Opening another ticket will discard the edits in this form.'
                 : 'Closing ticket details will discard the edits in this form.'}

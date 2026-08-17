@@ -99,7 +99,7 @@ textarea {
 }
 
 .workspace:focus-visible {
-  outline: 3px solid #7c8cff;
+  outline: 3px solid #6878df;
   outline-offset: 0.5rem;
 }
 
@@ -158,7 +158,7 @@ textarea {
 
 .panel h2:focus-visible {
   border-radius: 0.2rem;
-  outline: 3px solid #7c8cff;
+  outline: 3px solid #6878df;
   outline-offset: 0.25rem;
 }
 
@@ -302,8 +302,14 @@ textarea {
 
 .clear-button:focus-visible {
   border-radius: 0.15rem;
-  outline: 3px solid #7c8cff;
+  outline: 3px solid #6878df;
   outline-offset: 2px;
+}
+
+.clear-button:disabled {
+  color: #737e92;
+  text-decoration: none;
+  cursor: not-allowed;
 }
 
 .filter-groups {
@@ -346,7 +352,7 @@ textarea {
 }
 
 .filter-option input:focus-visible {
-  outline: 3px solid #7c8cff;
+  outline: 3px solid #6878df;
   outline-offset: 2px;
 }
 
@@ -569,7 +575,7 @@ textarea {
 }
 
 .secondary-button:focus-visible {
-  outline: 3px solid #7c8cff;
+  outline: 3px solid #6878df;
   outline-offset: 2px;
 }
 
@@ -672,7 +678,7 @@ textarea {
 }
 
 .sort-button:focus-visible {
-  outline: 3px solid #7c8cff;
+  outline: 3px solid #6878df;
   outline-offset: 2px;
 }
 
@@ -720,7 +726,7 @@ textarea {
 }
 
 .selection-column input:focus-visible {
-  outline: 3px solid #7c8cff;
+  outline: 3px solid #6878df;
   outline-offset: 2px;
 }
 
@@ -824,7 +830,7 @@ textarea {
 
 .primary-button:focus-visible,
 .bulk-action-controls select:focus-visible {
-  outline: 3px solid #7c8cff;
+  outline: 3px solid #6878df;
   outline-offset: 2px;
 }
 
@@ -885,7 +891,7 @@ textarea {
 
 .ticket-title-button:focus-visible {
   border-radius: 0.15rem;
-  outline: 3px solid #7c8cff;
+  outline: 3px solid #6878df;
   outline-offset: 3px;
 }
 
@@ -970,7 +976,7 @@ textarea {
 }
 
 .danger-button:focus-visible {
-  outline: 3px solid #7c8cff;
+  outline: 3px solid #6878df;
   outline-offset: 2px;
 }
 
@@ -1024,7 +1030,7 @@ textarea {
 }
 
 .dialog-close:focus-visible {
-  outline: 3px solid #7c8cff;
+  outline: 3px solid #6878df;
   outline-offset: 2px;
 }
 
@@ -1123,7 +1129,7 @@ textarea {
 }
 
 .edit-error-summary:focus-visible {
-  outline: 3px solid #7c8cff;
+  outline: 3px solid #6878df;
   outline-offset: 2px;
 }
 
@@ -1577,8 +1583,8 @@ textarea {
   }
 
   .ticket-table tbody tr:focus-within {
-    border-color: #7c8cff;
-    box-shadow: 0 0 0 3px rgb(124 140 255 / 18%);
+    border-color: #6878df;
+    box-shadow: 0 0 0 3px rgb(104 120 223 / 20%);
   }
 
   .ticket-table tbody th,
