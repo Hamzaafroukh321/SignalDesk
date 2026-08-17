@@ -991,4 +991,194 @@ describe('SignalDesk application shell', () => {
       }),
     ).toBeVisible()
   })
+
+  it('rolls back a failed save while retaining the draft for retry', async () => {
+    const user = userEvent.setup()
+    const repository = createTicketRepository({
+      defaultLatencyMs: 0,
+      plans: {
+        updateTicket: [
+          { fault: { message: 'The local repository is unavailable.' } },
+          {},
+        ],
+      },
+    })
+    render(<App repository={repository} />)
+    await screen.findByRole('table')
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+      }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    const dialogScope = within(dialog)
+    await user.click(dialogScope.getByRole('button', { name: 'Edit ticket' }))
+    const title = dialogScope.getByRole('textbox', { name: 'Title' })
+    await user.clear(title)
+    await user.type(title, 'Retained invoice recovery draft')
+    await user.click(dialogScope.getByRole('button', { name: 'Save ticket' }))
+
+    const saveError = await dialogScope.findByRole('alert')
+    expect(saveError).toHaveTextContent('Ticket save failed')
+    expect(saveError).toHaveTextContent('Your draft is still here')
+    expect(title).toHaveValue('Retained invoice recovery draft')
+    expect(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+      }),
+    ).toBeVisible()
+
+    await user.click(dialogScope.getByRole('button', { name: 'Retry save' }))
+    expect(
+      await screen.findByRole('dialog', {
+        name: 'Retained invoice recovery draft',
+      }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Retained invoice recovery draft',
+      }),
+    ).toBeVisible()
+  })
+
+  it('surfaces a version conflict, adopts newer data, and retries the retained draft', async () => {
+    const user = userEvent.setup()
+    const repository = createTicketRepository({ defaultLatencyMs: 0 })
+    render(<App repository={repository} />)
+    await screen.findByRole('table')
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+      }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    const dialogScope = within(dialog)
+    await user.click(dialogScope.getByRole('button', { name: 'Edit ticket' }))
+    const title = dialogScope.getByRole('textbox', { name: 'Title' })
+    await user.clear(title)
+    await user.type(title, 'Agent invoice resolution draft')
+
+    const currentTicket = await repository.getTicket('SD-1048')
+    const teammateTicket = await repository.updateTicket({
+      id: currentTicket.id,
+      expectedVersion: currentTicket.version,
+      changes: { title: 'Teammate invoice correction' },
+    })
+    await user.click(dialogScope.getByRole('button', { name: 'Save ticket' }))
+
+    const conflict = await dialogScope.findByRole('alert')
+    expect(conflict).toHaveTextContent('Review a newer ticket version')
+    expect(conflict).toHaveTextContent(`now version ${teammateTicket.version}`)
+    expect(conflict).toHaveTextContent('Teammate invoice correction')
+    expect(title).toHaveValue('Agent invoice resolution draft')
+    expect(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Teammate invoice correction',
+      }),
+    ).toBeVisible()
+
+    await user.click(dialogScope.getByRole('button', { name: 'Retry save' }))
+    expect(
+      await screen.findByRole('dialog', {
+        name: 'Agent invoice resolution draft',
+      }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Agent invoice resolution draft',
+      }),
+    ).toBeVisible()
+  })
+
+  it('does not let an earlier failed save clear a later optimistic action', async () => {
+    const user = userEvent.setup()
+    const repository = createTicketRepository({ defaultLatencyMs: 0 })
+    const updateTicket = repository.updateTicket.bind(repository)
+    let releaseFirst: (() => void) | undefined
+    let releaseSecond: (() => void) | undefined
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const secondGate = new Promise<void>((resolve) => {
+      releaseSecond = resolve
+    })
+    let callCount = 0
+    const updateSpy = vi
+      .spyOn(repository, 'updateTicket')
+      .mockImplementation(async (command, options) => {
+        callCount += 1
+        if (callCount === 1) {
+          await firstGate
+          throw new Error('The earlier save failed.')
+        }
+        await secondGate
+        return updateTicket(command, options)
+      })
+
+    render(<App repository={repository} />)
+    await screen.findByRole('table')
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Invoice shows duplicate annual charge',
+      }),
+    )
+    let dialog = await screen.findByRole('dialog')
+    let dialogScope = within(dialog)
+    await user.click(dialogScope.getByRole('button', { name: 'Edit ticket' }))
+    let title = dialogScope.getByRole('textbox', { name: 'Title' })
+    await user.clear(title)
+    await user.type(title, 'Earlier invoice draft')
+    await user.click(dialogScope.getByRole('button', { name: 'Save ticket' }))
+    await screen.findByRole('button', {
+      name: 'Open SD-1048 details: Earlier invoice draft',
+    })
+    await user.click(dialogScope.getByRole('button', { name: 'Close details' }))
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Earlier invoice draft',
+      }),
+    )
+    dialog = await screen.findByRole('dialog')
+    dialogScope = within(dialog)
+    await user.click(
+      await dialogScope.findByRole('button', { name: 'Edit ticket' }),
+    )
+    title = dialogScope.getByRole('textbox', { name: 'Title' })
+    await user.clear(title)
+    await user.type(title, 'Later successful invoice action')
+    await user.click(dialogScope.getByRole('button', { name: 'Save ticket' }))
+    expect(updateSpy).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      releaseFirst?.()
+      await firstGate
+    })
+    expect(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Later successful invoice action',
+      }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('dialog', {
+        name: 'Later successful invoice action',
+      }),
+    ).toBeVisible()
+    expect(
+      dialogScope.getByRole('button', { name: 'Saving ticket…' }),
+    ).toBeDisabled()
+
+    await act(async () => {
+      releaseSecond?.()
+      await secondGate
+    })
+    expect(
+      await dialogScope.findByRole('button', { name: 'Edit ticket' }),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', {
+        name: 'Open SD-1048 details: Later successful invoice action',
+      }),
+    ).toBeVisible()
+  })
 })

@@ -11,6 +11,7 @@ import {
 } from '../../domain/ticket'
 import {
   isAbortError,
+  TicketVersionConflictError,
   type TicketChanges,
   type TicketRepository,
   type TicketSortField,
@@ -51,6 +52,11 @@ type BulkUpdateState =
   | { status: 'success'; message: string }
   | { status: 'error'; message: string }
 
+interface OptimisticSave {
+  operationId: number
+  ticket: Ticket
+}
+
 function getSnapshot(list: ListResource): TicketListSnapshot | null {
   if (list.status === 'success') return list.snapshot
   return list.previous
@@ -78,7 +84,9 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   const [bulkUpdate, setBulkUpdate] = useState<BulkUpdateState>({ status: 'idle' })
   const [activeTicketId, setActiveTicketId] = useState<TicketId | null>(null)
   const [detail, setDetail] = useState<TicketDetailResource | null>(null)
-  const [optimisticTicket, setOptimisticTicket] = useState<Ticket | null>(null)
+  const [optimisticSaves, setOptimisticSaves] = useState<
+    ReadonlyMap<TicketId, OptimisticSave>
+  >(() => new Map())
   const [detailRequestVersion, setDetailRequestVersion] = useState(0)
   const [listState, setListState] = useState(() =>
     parseTicketListState(window.location.search),
@@ -97,6 +105,8 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   const focusResultsAfterRetryRef = useRef(false)
   const latestRequestRef = useRef(0)
   const latestDetailRequestRef = useRef(0)
+  const saveOperationSequenceRef = useRef(0)
+  const latestSaveByTicketRef = useRef<Map<TicketId, number>>(new Map())
   const dialogTriggerRef = useRef<{
     id: TicketId
     element: HTMLButtonElement
@@ -269,13 +279,16 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
     ? visibleSnapshot.ids.flatMap((id) => {
         const ticket = visibleSnapshot.entities.get(id)
         if (!ticket) return []
-        return [optimisticTicket?.id === id ? optimisticTicket : ticket]
+        return [optimisticSaves.get(id)?.ticket ?? ticket]
       })
     : []
 
   const visibleDetail: TicketDetailResource | null =
-    detail?.status === 'success' && optimisticTicket?.id === detail.ticket.id
-      ? { status: 'success', ticket: optimisticTicket }
+    detail?.status === 'success' && optimisticSaves.has(detail.ticket.id)
+      ? {
+          status: 'success',
+          ticket: optimisticSaves.get(detail.ticket.id)?.ticket ?? detail.ticket,
+        }
       : detail
 
   const markResultsUpdating = () => {
@@ -476,7 +489,47 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
   const saveActiveTicket = async (changes: TicketChanges) => {
     if (detail?.status !== 'success') return
     const baseline = detail.ticket
-    setOptimisticTicket(applyTicketChanges(baseline, changes))
+    const operationId = saveOperationSequenceRef.current + 1
+    saveOperationSequenceRef.current = operationId
+    latestSaveByTicketRef.current.set(baseline.id, operationId)
+    setOptimisticSaves((current) => {
+      const next = new Map(current)
+      next.set(baseline.id, {
+        operationId,
+        ticket: applyTicketChanges(baseline, changes),
+      })
+      return next
+    })
+
+    const reconcileAuthoritativeTicket = (ticket: Ticket) => {
+      setDetail((current) => {
+        if (!current) return current
+        const currentId =
+          current.status === 'success' ? current.ticket.id : current.ticketId
+        if (currentId !== ticket.id) return current
+        if (
+          current.status === 'success' &&
+          current.ticket.version > ticket.version
+        ) {
+          return current
+        }
+        return { status: 'success', ticket }
+      })
+      setList((current) => {
+        const snapshot = getSnapshot(current)
+        if (!snapshot) return current
+        const entities = new Map(snapshot.entities)
+        const existing = entities.get(ticket.id)
+        if (!existing || existing.version <= ticket.version) {
+          entities.set(ticket.id, ticket)
+        }
+        return {
+          status: 'loading',
+          previous: { ...snapshot, entities },
+        }
+      })
+      setRequestVersion((version) => version + 1)
+    }
 
     try {
       const saved = await repository.updateTicket({
@@ -484,26 +537,22 @@ export function TicketWorkspace({ repository }: TicketWorkspaceProps) {
         expectedVersion: baseline.version,
         changes,
       })
-      setDetail((current) =>
-        current?.status === 'success' && current.ticket.id === saved.id
-          ? { status: 'success', ticket: saved }
-          : current,
-      )
-      setList((current) => {
-        const snapshot = getSnapshot(current)
-        if (!snapshot) return current
-        const entities = new Map(snapshot.entities)
-        entities.set(saved.id, saved)
-        return {
-          status: 'loading',
-          previous: { ...snapshot, entities },
-        }
-      })
-      setRequestVersion((version) => version + 1)
+      reconcileAuthoritativeTicket(saved)
+    } catch (error) {
+      if (error instanceof TicketVersionConflictError) {
+        reconcileAuthoritativeTicket(error.currentTicket)
+      }
+      throw error
     } finally {
-      setOptimisticTicket((current) =>
-        current?.id === baseline.id ? null : current,
-      )
+      setOptimisticSaves((current) => {
+        if (current.get(baseline.id)?.operationId !== operationId) return current
+        const next = new Map(current)
+        next.delete(baseline.id)
+        return next
+      })
+      if (latestSaveByTicketRef.current.get(baseline.id) === operationId) {
+        latestSaveByTicketRef.current.delete(baseline.id)
+      }
     }
   }
 

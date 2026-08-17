@@ -9,7 +9,10 @@ import {
   type TicketPriority,
   type TicketStatus,
 } from '../../domain/ticket'
-import type { TicketChanges } from '../../data/ticketRepository'
+import {
+  TicketVersionConflictError,
+  type TicketChanges,
+} from '../../data/ticketRepository'
 
 interface TicketDraft {
   title: string
@@ -22,6 +25,10 @@ interface TicketDraft {
 
 type ValidatedField = 'title' | 'description'
 type ValidationErrors = Partial<Record<ValidatedField, string>>
+
+type SaveError =
+  | { kind: 'ordinary' }
+  | { kind: 'conflict'; ticket: Ticket }
 
 const TITLE_MIN_LENGTH = 4
 const TITLE_MAX_LENGTH = 120
@@ -85,7 +92,7 @@ export function TicketEditForm({
 }: TicketEditFormProps) {
   const [draft, setDraft] = useState(() => createDraft(ticket))
   const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState('')
+  const [saveError, setSaveError] = useState<SaveError | null>(null)
   const [validationErrors, setValidationErrors] =
     useState<ValidationErrors>({})
   const [summaryFocusRequest, setSummaryFocusRequest] = useState(0)
@@ -138,7 +145,7 @@ export function TicketEditForm({
 
     savingRef.current = true
     setSaving(true)
-    setSaveError('')
+    setSaveError(null)
     setValidationErrors({})
     try {
       await onSave({
@@ -151,8 +158,12 @@ export function TicketEditForm({
         description: draft.description,
         tags: fixtureTags.filter((tag) => draft.tagIds.includes(tag.id)),
       })
-    } catch {
-      setSaveError('The ticket could not be saved. Your edits are still here.')
+    } catch (error) {
+      setSaveError(
+        error instanceof TicketVersionConflictError
+          ? { kind: 'conflict', ticket: error.currentTicket }
+          : { kind: 'ordinary' },
+      )
       savingRef.current = false
       setSaving(false)
     }
@@ -343,9 +354,26 @@ export function TicketEditForm({
       </fieldset>
 
       {saveError ? (
-        <p className="edit-save-error" role="alert">
-          {saveError}
-        </p>
+        <div className="edit-save-error" role="alert">
+          <h3>
+            {saveError.kind === 'conflict'
+              ? 'Review a newer ticket version'
+              : 'Ticket save failed'}
+          </h3>
+          {saveError.kind === 'conflict' ? (
+            <p>
+              This ticket changed elsewhere and is now version{' '}
+              {saveError.ticket.version}. The latest saved title is “
+              {saveError.ticket.title}”. Your draft is still here; review it,
+              then retry.
+            </p>
+          ) : (
+            <p>
+              The last saved values were restored in the ticket list. Your
+              draft is still here; check your connection and retry.
+            </p>
+          )}
+        </div>
       ) : null}
 
       <div className="edit-actions full-field">
@@ -358,7 +386,7 @@ export function TicketEditForm({
           Cancel editing
         </button>
         <button className="primary-button" type="submit" disabled={saving}>
-          {saving ? 'Saving ticket…' : 'Save ticket'}
+          {saving ? 'Saving ticket…' : saveError ? 'Retry save' : 'Save ticket'}
         </button>
       </div>
     </form>

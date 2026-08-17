@@ -958,10 +958,24 @@ textarea {
 
 .edit-save-error {
   grid-column: 1 / -1;
-  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid #dc8090;
+  border-radius: 0.6rem;
   color: #a12634;
+  background: #fff5f6;
   font-size: 0.78rem;
   font-weight: 700;
+}
+
+.edit-save-error h3,
+.edit-save-error p {
+  margin: 0;
+}
+
+.edit-save-error p {
+  margin-top: 0.3rem;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .ticket-facts {
